@@ -20,6 +20,8 @@ and may include the following (values in parentheses are defaults)::
                       or 'adj' bearing the structure.
     - SA method (optional): The software to use for running SA: Either 'RMG' (default), 'RMS', or 'Cantera'.
     - SA threshold (optional): The SA threshold to use, 0.001 by default.
+    - SA atol (optional): The absolute tolerance to use for SA, 1e-6 by default.
+    - SA rtol (optional): The relative tolerance to use for SA, 1e-4 by default.
     - SA species (10): The top X species each observable is sensitive to for which thermo will be calculated.
     - SA reactions (10): The top X reactions each observable is sensitive to for which participating species thermo
                          will be calculated.
@@ -481,6 +483,8 @@ def parse_arc_input_file(input_file_path: Union[str, list],
 
     arguments['SA observables'] = input_dict['SA observables'] if 'SA observables' in input_dict else list()
     arguments['SA method'] = input_dict['SA method'] if 'SA method' in input_dict else 'RMG'
+    arguments["SA atol"] = input_dict['SA atol'] if 'SA atol' in input_dict else 1e-6
+    arguments["SA rtol"] = input_dict['SA rtol'] if 'SA rtol' in input_dict else 1e-4
     arguments['SA threshold'] = input_dict['SA threshold'] if 'SA threshold' in input_dict else 0.001
     arguments['SA species'] = input_dict['SA species'] if 'SA species' in input_dict else 10 and has_sa
     arguments['SA reactions'] = input_dict['SA reactions'] if 'SA reactions' in input_dict else 10 and has_sa
