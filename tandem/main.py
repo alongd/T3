@@ -19,7 +19,7 @@ and may include the following (values in parentheses are defaults)::
     - SA observables: A list of observables for the SA. Entries are dictionaries, keys are 'label' and either 'smiles'
                       or 'adj' bearing the structure.
     - SA method (optional): The software to use for running SA: Either 'RMG' (default), 'RMS', or 'Cantera'.
-    - SA threshold (optional): The SA threshold to use, 0.01 by default.
+    - SA threshold (optional): The SA threshold to use, 0.001 by default.
     - SA species (10): The top X species each observable is sensitive to for which thermo will be calculated.
     - SA reactions (10): The top X reactions each observable is sensitive to for which participating species thermo
                          will be calculated.
