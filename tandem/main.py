@@ -55,7 +55,6 @@ Todo:
 
 import inspect
 import os
-import pandas as pd
 import re
 import shutil
 import time
@@ -85,15 +84,12 @@ from rmgpy.exceptions import \
      StatmechError,
      StatmechFitError,
      )
+from rmgpy.molecule import Molecule
 from rmgpy.rmg.main import initialize_log as initialize_rmg_log
 from rmgpy.rmg.main import RMG
 from rmgpy.rmg.pdep import PDepReaction
-from rmgpy.solver.simple import SimpleReactor
-from rmgpy.solver.liquid import LiquidReactor
 from rmgpy.species import Species
 from rmgpy.thermo import NASAPolynomial, NASA, ThermoData, Wilhoit
-from rmgpy.tools.loader import load_rmg_py_job
-from rmgpy.tools.simulate import simulate
 
 from arc.common import get_ordinal_indicator, key_by_val, read_yaml_file, time_lapse
 from arc.main import ARC
@@ -107,6 +103,7 @@ from .logger import \
      log_species_to_calculate,
      log_unconverged_species,
      )
+from .simulate.factory import simulate_factory
 from .utils import combine_dicts, delete_root_rmg_log, dict_to_str
 
 if TYPE_CHECKING:
@@ -188,13 +185,21 @@ def execute(args,
             run_rmg(input_file=rmg_input_file, output_directory=run_directory, kwargs=kwargs, arguments=arguments,
                     tolerance=tolerance, thermo_library=thermo_library)
 
-        sa_success = run_sa(method=arguments['SA method'],
-                            observable_list=arguments['SA observables'],
-                            input_file=rmg_input_file,
-                            run_directory=run_directory,
-                            threshold=arguments['SA threshold'],
-                            )
-        if not sa_success:
+        simulate_adapter = simulate_factory(simulate_method=arguments['SA method'],
+                                            observable_list=arguments['SA observables'],
+                                            run_directory=run_directory,
+                                            atol=1e-6,  # todo update this with arguments from T3 input file
+                                            rtol=1e-4,  # todo update this with arguments from T3 input file
+                                            sa_threshold=arguments['SA threshold'],
+                                            sa_atol=arguments['SA atol'],
+                                            sa_rtol=arguments['SA rtol'],
+                                            verbose=verbose,
+                                            )
+
+        if len(arguments['SA observables']) :
+            # if there are SA observables to calculate, return the dictionary containing all SA coefficients for these species
+            sa_dict = simulate_adapter.get_sa_coefficients()
+        else:
             log(f'Could not complete the sensitivity analysis using {arguments["SA method"]}', 'error', verbose=verbose)
             if len(tolerances) > i + 1:
                 # the next iteration will utilize a tighter tolerance
@@ -208,6 +213,7 @@ def execute(args,
             arguments=arguments,
             unconverged_species=unconverged_species,
             all_species=all_species,
+            sa_dict=sa_dict,
             iteration=i,
             executed_networks=executed_networks,
         )
@@ -369,106 +375,6 @@ def run_arc(input_dict: Union[str, dict],
         raise
     elapsed_time = time_lapse(tic)
     log(f'ARC terminated. Overall execution time: {elapsed_time}', verbose=verbose)
-
-
-def run_sa(method: str,
-           observable_list: list,
-           run_directory: str,
-           input_file: str,
-           threshold: Optional[float] = 0.001,
-           verbose: Optional[bool] = True,
-           ) -> bool:
-    """
-    Run a sensitivity analysis.
-
-    Args:
-        method (str): The software to use, either RMG, RMS, or Cantera.
-        observable_list (list): Entries are dictionaries of 'label' and structure (either 'smiles' or 'adj').
-        run_directory (str): A path to the RMG-ARC iteration directory.
-        input_file (str): The path to the legacy RMG input file.
-        threshold (Optional[float]): The sensitivity threshold to use.
-        verbose (Optional[bool]): Whether or not to log to file.
-
-    Raises:
-        InputError: If ``method`` has a wrong value.
-
-    Returns:
-        bool: Whether SA ran successfully. ``True`` if it did.
-    """
-    if method.lower() not in ['rmg', 'rms', 'cantera']:
-        raise InputError(f'The "SA method" argument must equal to either "RMG", "RMS", or "Cantera". Got: {method}')
-    if method.lower() == 'rmg':
-        log('Running SA using RMG...', verbose=verbose)
-        model = os.path.join(run_directory, 'chemkin', 'chem_annotated.inp')
-        species_dict = os.path.join(run_directory, 'chemkin', 'species_dictionary.txt')
-        sa_path = os.path.join(run_directory, 'sa')
-        if not os.path.isdir(sa_path):
-            os.mkdir(sa_path)
-        rmg_sa_input_file = os.path.join(sa_path, 'input.py')
-        if os.path.isfile(rmg_sa_input_file):
-            os.remove(rmg_sa_input_file)
-        shutil.copyfile(src=input_file, dst=rmg_sa_input_file)
-
-        rmg = load_rmg_py_job(input_file=rmg_sa_input_file,
-                              chemkin_file=model,
-                              species_dict=species_dict,
-                              generate_images=True,
-                              use_chemkin_names=False,
-                              check_duplicates=False)
-
-        rmg_species = rmg.reaction_model.core.species
-        rmg_observable_species = list()
-        for observable in observable_list:
-            for rmg_spc in rmg_species:
-                if 'adj' in observable:
-                    observable_spc = Species(label=observable['label']).from_adjacency_list(observable['adj'])
-                elif 'smiles' in observable:
-                    observable_spc = Species(label=observable['label']).from_smiles(observable['smiles'])
-                else:
-                    raise InputError(f'All SA observables must have structure (smiles or adj), got: {observable}')
-                if observable_spc.label == rmg_spc.label or observable_spc.is_isomorphic(rmg_spc):
-                    rmg_observable_species.append(rmg_spc)
-                    break
-            else:
-                raise InputError(f'Could not find the observable species {observable["label"]} '
-                                 f'in the RMG species list.')
-
-        for reaction_system in rmg.reaction_systems:
-            if isinstance(reaction_system, SimpleReactor):
-                reaction_system.sensitive_species = rmg_observable_species
-                reaction_system.sensitivity_threshold = threshold
-                if hasattr(reaction_system, 'Trange') and reaction_system.Trange is not None:
-                    temperature = sum([t.value_si for t in reaction_system.Trange]) / len(reaction_system.Trange)
-                else:
-                    temperature = reaction_system.T.value_si
-                reaction_system.sens_conditions['T'] = temperature
-                if hasattr(reaction_system, 'Prange') and reaction_system.Prange is not None:
-                    pressure = sum([p.value_si for p in reaction_system.Prange]) / len(reaction_system.Prange)
-                else:
-                    pressure = reaction_system.P.value_si
-                reaction_system.sens_conditions['P'] = pressure
-            elif isinstance(reaction_system, LiquidReactor):
-                reaction_system.sensitive_species = rmg_observable_species
-                reaction_system.sensitivity_threshold = threshold
-                if hasattr(reaction_system, 'Trange') and reaction_system.Trange is not None:
-                    temperature = sum([t.value_si for t in reaction_system.Trange]) / len(reaction_system.Trange)
-                else:
-                    temperature = reaction_system.T.value_si
-                reaction_system.sens_conditions['T'] = temperature
-                if hasattr(reaction_system, 'Vrange') and reaction_system.Vrange is not None:
-                    volume = sum([v for v in reaction_system.Vrange]) / len(reaction_system.Vrange)
-                else:
-                    volume = reaction_system.V
-                reaction_system.sens_conditions['V'] = volume
-            else:
-                raise NotImplementedError(f'RMG SA not implemented for Reactor type {type(reaction_system)}.')
-        try:
-            simulate(rmg)
-        except FileNotFoundError:
-            return False
-    else:
-        raise NotImplementedError('Currently only RMG is implemented as an SA method')  # temp
-    return True
 
 
 def restart_t3(path: str,
@@ -750,6 +656,27 @@ def get_species_label_by_structure(adj: str,
     return None
 
 
+def get_species_by_structure(adj : str,
+                             species_list: list,
+                             ) -> Union[str, None]:
+    """
+    Get a species object from a list of species by its structure (adjacency list).
+
+    Args:
+        adj (str): The species adjacency list.
+        species_list (list): Entries are RMG Species objects.
+
+    Returns:
+        Union[str, None]: The corresponding species object from the species_list.
+                          Returns ``None`` if no species was found.
+    """
+
+    new_spc = Species().from_adjacency_list(adj)
+    for spc in species_list:
+        if spc.is_isomorphic(new_spc):
+            return spc
+
+
 def get_species_by_label(label: str,
                          species_list: list,
                          ) -> Union[Species, None]:
@@ -903,6 +830,7 @@ def determine_species_to_calculate(run_directory: str,
                                    arguments: dict,
                                    unconverged_species: list,
                                    all_species: list,
+                                   sa_dict: dict,
                                    iteration: int,
                                    executed_networks: list,
                                    verbose: Optional[bool] = True,
@@ -917,6 +845,8 @@ def determine_species_to_calculate(run_directory: str,
         unconverged_species (list): Entries are RMG Species for which thermo calculations did not converge
                                     in ARC throughout the iterations.
         all_species (list): Entries are RMG Species identified so far to be calculated. Used for setting legal names.
+        sa_dict (dict): Dictionary with keys of `kinetics`, `thermo`, and `time`. The full structure is described in
+                        the RMG Simulator Adatper.
         iteration (int): The current T3 iteration number.
         executed_networks (list): Entries are tuples of isomers labels from networks which were already executed.
         verbose (Optional[bool]): Whether or not to log to file.
@@ -944,12 +874,21 @@ def determine_species_to_calculate(run_directory: str,
             if has_high_uncertainty(species, unconverged_species, species_to_calc):
                 species_to_calc[species.to_chemkin()] = {'spc': species, 'reason': 'All core species'}
     else:
-
         # SA
         if arguments['SA observables'] or arguments['SA species'] or arguments['SA reactions'] \
                 or arguments['SA pdep threshold'] < 1:
             species_to_calc_sa, executed_networks = determine_species_based_on_sensitivity(
-                run_directory, arguments, rmg_species, rmg_reactions, unconverged_species, iteration, executed_networks)
+                run_directory, arguments, rmg_species, rmg_reactions, unconverged_species, sa_dict, iteration, executed_networks)
+
+        # UA
+        if arguments['SA observables']:
+            print(f'arguments SA observables is {arguments["SA observables"]}')
+            for observable_label in arguments['SA observables']:
+                adj = observable_label['adj'] if 'adj' in observable_label else Molecule(smiles=observable_label['smiles']).to_adjacency_list()
+                # get the RMG species object
+                observable = get_species_by_structure(adj, rmg_species)
+                if has_high_uncertainty(observable, unconverged_species, species_to_calc):
+                    species_to_calc[observable.to_chemkin()] = {'spc': observable, 'reason': 'observable'}
 
         # collision violators
         if arguments['collision violators']:
@@ -972,6 +911,7 @@ def determine_species_based_on_sensitivity(run_directory: str,
                                            rmg_species: list,
                                            rmg_reactions: list,
                                            unconverged_species: list,
+                                           sa_dict: dict,
                                            iteration: int,
                                            executed_networks: list,
                                            verbose: Optional[bool] = True,
@@ -986,6 +926,8 @@ def determine_species_based_on_sensitivity(run_directory: str,
         rmg_reactions (list): All RMG Reactions parsed from the Chemkin file.
         unconverged_species (list): Entries are RMG Species for which thermo calculations did not converge
                                     in ARC throughout the iterations.
+        sa_dict (dict): Dictionary with keys of `kinetics`, `thermo`, and `time`. The full structure is described in
+                        the RMG Simulator Adatper.
         iteration (int): The current T3 iteration number.
         executed_networks (list): Entries are tuples of isomers labels from networks which were already executed.
         verbose (Optional[bool]): Whether or not to log to file.
@@ -998,71 +940,42 @@ def determine_species_based_on_sensitivity(run_directory: str,
     """
     species_to_calc = dict()  # keys are labels, values are dicts of {'spc': RMG Species objects, 'reason': ``str``}
     pdep_rxns_to_explore = list()  # Entries are (pressure dependent reaction, i, observable_label) tuples
-    sa_path = os.path.join(run_directory, 'sa', 'solver')
-    if not os.path.exists(sa_path):
-        log("Could not find the path to RMG's solver output folder. Not executing "
-            "calculations in ARC based on sensitivity analysis!",
+
+    if sa_dict is None:
+        log("Could not obtain SA coefficients. Not spawning quantum jobs based on sensitivity!",
             level='error', verbose=verbose)
         return dict(), list()
 
-    sa_files = list()
-    for file_ in os.listdir(sa_path):
-        if 'sensitivity' in file_ and file_.endswith(".csv"):
-            sa_files.append(file_)
-
-    for sa_file in sa_files:
-        # iterate through all SA .csv files in the solver folder
-        df = pd.read_csv(os.path.join(sa_path, sa_file))
-        sa_dict = {'rxn': dict(), 'spc': dict()}
-        for header in df.columns:
-            # iterate through all headers in the SA .csv file, but skip the `Time (s)` column
-            sa_type = None
-            if 'dln[k' in header and arguments['SA reactions']:
-                sa_type = 'rxn'
-            elif 'dG' in header and arguments['SA species']:
-                sa_type = 'spc'
-            if sa_type is not None:
-                # proceed only if we care about this column
+    # create new dictionary that stores the absolute maximum value from each SA
+    sa_dict_max = {'rxn': dict(), 'spc': dict()}
+    for key, max_key in [['kinetics', 'rxn'], ['thermo', 'spc']]:
+        for observable_label in sa_dict[key].keys():
+            if observable_label not in sa_dict_max[max_key]:
+                sa_dict_max[max_key][observable_label] = list()
+            for parameter in sa_dict[key][observable_label].keys():
                 entry = dict()
-                # check whether the observable requires calculations:
-                observable_label = header.split('[')[1].split(']')[0]
-                observable = get_species_by_label(observable_label, rmg_species)
-                if observable is None:
-                    log(f'Could not identify observable species {observable_label}!',
-                        level='error', verbose=verbose)
-                if arguments['SA observables'] \
-                        and has_high_uncertainty(observable, unconverged_species, species_to_calc):
-                    species_to_calc[observable.to_chemkin()] = {'spc': observable, 'reason': 'observable'}
-                # continue with the parameter this column represents
-                observable_label = observable.to_chemkin()
-                if observable_label not in sa_dict[sa_type]:
-                    sa_dict[sa_type][observable_label] = list()
-                # parameter extraction examples:
-                # for species get 'C2H4(8)' from `dln[ethane(1)]/dG[C2H4(8)]`
-                # for reaction, get 8 from `dln[ethane(1)]/dln[k8]: H(6)+ethane(1)=H2(12)+C2H5(5)`
-                parameter = header.split('[')[2].split(']')[0]
-                if sa_type == 'rxn':
-                    parameter = int(parameter[1:])
-                entry['parameter'] = parameter  # rxn number or spc label
-                entry['max_sa'] = max(df[header].max(), abs(df[header].min()))  # the coefficient could be negative
-                sa_dict[sa_type][observable_label].append(entry)
+                entry['parameter'] = parameter  # rxn number as int or spc label as str
+                entry['max_sa'] = max(sa_dict[key][observable_label][parameter].max(), abs(
+                    sa_dict[key][observable_label][parameter].min()))  # the coefficient could be negative
+                sa_dict_max[max_key][observable_label].append(entry)
 
-        # get the top X entries from the SA
-        for observable_label, sa_list in sa_dict['rxn'].items():
-            sa_list_sorted = sorted(sa_list, key=lambda item: item['max_sa'], reverse=True)
-            for i in range(min(arguments['SA reactions'], len(sa_list_sorted))):
-                reaction = get_reaction_by_index(sa_list_sorted[i]['parameter'] - 1, rmg_reactions)
-                for species in reaction.reactants + reaction.products:
-                    if has_high_uncertainty(species, unconverged_species, species_to_calc):
-                        num = f'{i+1}{get_ordinal_indicator(i+1)} ' if i else ''
-                        reason = f'(iteration {iteration}) participates in the {num}most sensitive reaction ' \
-                                 f'for {observable_label}: {reaction}'
-                        species_to_calc[species.to_chemkin()] = {'spc': species, 'reason': reason}
-                if reaction.kinetics.is_pressure_dependent() \
-                        and reaction not in [rxn_tup[0] for rxn_tup in pdep_rxns_to_explore] \
-                        and arguments['SA pdep threshold'] < 1:
-                    pdep_rxns_to_explore.append((reaction, i, observable_label))
-        for observable_label, sa_list in sa_dict['spc'].items():
+    # get the top X entries from the SA
+    for observable_label, sa_list in sa_dict_max['rxn'].items():
+        sa_list_sorted = sorted(sa_list, key=lambda item: item['max_sa'], reverse=True)
+        for i in range(min(arguments['SA reactions'], len(sa_list_sorted))):
+            reaction = get_reaction_by_index(sa_list_sorted[i]['parameter'] - 1, rmg_reactions)
+            for species in reaction.reactants + reaction.products:
+                if has_high_uncertainty(species, unconverged_species, species_to_calc):
+                    num = f'{i+1}{get_ordinal_indicator(i+1)} ' if i else ''
+                    reason = f'(iteration {iteration}) participates in the {num}most sensitive reaction ' \
+                             f'for {observable_label}: {reaction}'
+                    species_to_calc[species.to_chemkin()] = {'spc': species, 'reason': reason}
+            if reaction.kinetics.is_pressure_dependent() \
+                    and reaction not in [rxn_tup[0] for rxn_tup in pdep_rxns_to_explore] \
+                    and arguments['SA pdep threshold'] < 1:
+                pdep_rxns_to_explore.append((reaction, i, observable_label))
+
+        for observable_label, sa_list in sa_dict_max['spc'].items():
             sa_list_sorted = sorted(sa_list, key=lambda item: item['max_sa'], reverse=True)
             for i in range(min(arguments['SA species'], len(sa_list_sorted))):
                 species = get_species_by_label(sa_list_sorted[i]['parameter'], rmg_species)
