@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+# encoding: utf-8
+
 """
 schema test module
 """
@@ -17,7 +20,7 @@ quote = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod
 def test_T3Options_schema():
     """Test creating an instance of T3Options"""
     # test that a T3Options object can be instantiated properly
-    T3_Options = T3Options(flux_adapter='RMG',
+    t3_options = T3Options(flux_adapter='RMG',
                            profiles_adapter='RMG',
                            collision_violator_thermo=False,
                            all_core_species=False,
@@ -29,17 +32,17 @@ def test_T3Options_schema():
                            max_T3_walltime='01:00:00:00',
                            library_name='T3_library'
                            )
-    assert T3_Options.flux_adapter == 'RMG'
-    assert T3_Options.profiles_adapter == 'RMG'
-    assert T3_Options.collision_violator_thermo == False
-    assert T3_Options.all_core_species == False
-    assert T3_Options.all_core_reactions == False
-    assert T3_Options.fit_missing_GAV == False
-    assert T3_Options.max_T3_iterations == 5
-    assert T3_Options.max_RMG_exceptions_allowed == 5
-    assert T3_Options.max_RMG_walltime == '00:02:00:00'
-    assert T3_Options.max_T3_walltime == '01:00:00:00'
-    assert T3_Options.library_name == 'T3_library'
+    assert t3_options.flux_adapter == 'RMG'
+    assert t3_options.profiles_adapter == 'RMG'
+    assert t3_options.collision_violator_thermo is False
+    assert t3_options.all_core_species is False
+    assert t3_options.all_core_reactions is False
+    assert t3_options.fit_missing_GAV is False
+    assert t3_options.max_T3_iterations == 5
+    assert t3_options.max_RMG_exceptions_allowed == 5
+    assert t3_options.max_RMG_walltime == '00:02:00:00'
+    assert t3_options.max_T3_walltime == '01:00:00:00'
+    assert t3_options.library_name == 'T3_library'
 
     with pytest.raises(ValidationError):
         # check that flux_adapter is constrained to at most 255 characters
@@ -73,7 +76,7 @@ def test_T3Options_schema():
 def test_T3Sensitivity_schema():
     """Test creating an instance of T3Sensitivity"""
     # test that a T3Sensitivity object can be instantiated properly
-    T3_Sensitivity = T3Sensitivity(adapter=None,
+    t3_Sensitivity = T3Sensitivity(adapter=None,
                                    atol=1e-6,
                                    rtol=1e-4,
                                    global_observables=None,
@@ -83,15 +86,15 @@ def test_T3Sensitivity_schema():
                                    top_SA_species=10,
                                    top_SA_reactions=10
                                    )
-    assert T3_Sensitivity.adapter == None
-    assert T3_Sensitivity.atol == 1e-6
-    assert T3_Sensitivity.rtol == 1e-4
-    assert T3_Sensitivity.global_observables == None
-    assert T3_Sensitivity.SA_threshold == 0.01
-    assert T3_Sensitivity.pdep_SA_thershold == 0.001
-    assert T3_Sensitivity.ME_methods == ['CSE', 'MSC']
-    assert T3_Sensitivity.top_SA_species == 10
-    assert T3_Sensitivity.top_SA_reactions == 10
+    assert t3_Sensitivity.adapter is None
+    assert t3_Sensitivity.atol == 1e-6
+    assert t3_Sensitivity.rtol == 1e-4
+    assert t3_Sensitivity.global_observables is None
+    assert t3_Sensitivity.SA_threshold == 0.01
+    assert t3_Sensitivity.pdep_SA_thershold == 0.001
+    assert t3_Sensitivity.ME_methods == ['CSE', 'MSC']
+    assert t3_Sensitivity.top_SA_species == 10
+    assert t3_Sensitivity.top_SA_reactions == 10
 
     with pytest.raises(ValidationError):
         # check that adapter is constrained to at most 255 characters
@@ -157,7 +160,7 @@ def test_T3Sensitivity_schema():
 def test_T3Uncertainty():
     """Test creating an instance of T3Uncertainty"""
     # test that a T3Uncertainty object can be instantiated properly
-    T3_Uncertainty = T3Uncertainty(adapter=None,
+    t3_Uncertainty = T3Uncertainty(adapter=None,
                                    local_analysis=False,
                                    global_analysis=False,
                                    correlated=True,
@@ -169,17 +172,17 @@ def test_T3Uncertainty():
                                    PCE_max_evals=None,
                                    logx=False
                                    )
-    assert T3_Uncertainty.adapter == None
-    assert T3_Uncertainty.local_analysis == False
-    assert T3_Uncertainty.global_analysis == False
-    assert T3_Uncertainty.correlated == True
-    assert T3_Uncertainty.local_number == 10
-    assert T3_Uncertainty.global_number == 5
-    assert T3_Uncertainty.termination_time == None
-    assert T3_Uncertainty.PCE_run_time == 1800
-    assert T3_Uncertainty.PCE_error_tolerance == None
-    assert T3_Uncertainty.PCE_max_evals == None
-    assert T3_Uncertainty.logx == False
+    assert t3_Uncertainty.adapter is None
+    assert t3_Uncertainty.local_analysis is False
+    assert t3_Uncertainty.global_analysis is False
+    assert t3_Uncertainty.correlated is True
+    assert t3_Uncertainty.local_number == 10
+    assert t3_Uncertainty.global_number == 5
+    assert t3_Uncertainty.termination_time is None
+    assert t3_Uncertainty.PCE_run_time == 1800
+    assert t3_Uncertainty.PCE_error_tolerance is None
+    assert t3_Uncertainty.PCE_max_evals is None
+    assert t3_Uncertainty.logx is False
 
     with pytest.raises(ValidationError):
         # check that adapter is constrained to at most 255 characters
