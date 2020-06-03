@@ -26,6 +26,7 @@ quote = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod
         'fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt ' \
         'mollit anim id est laborum'
 
+
 def test_T3Options_schema():
     """Test creating an instance of T3Options"""
     t3_options = T3Options(flux_adapter='RMG',
@@ -241,9 +242,9 @@ def test_RMGSpecies_schema():
                              smiles='N#N',
                              inchi='1S/N2/c1-2',
                              adjlist="""
-                                     1 N u0 p1 c0 {2,T}
-                                     2 N u0 p1 c0 {1,T}
-                                     """,
+1 N u0 p1 c0 {2,T}
+2 N u0 p1 c0 {1,T}
+""",
                              reactive=False,
                              observable=False,
                              SA_observable=False,
@@ -257,10 +258,10 @@ def test_RMGSpecies_schema():
     assert rmg_species.smiles == 'N#N'
     assert rmg_species.inchi == '1S/N2/c1-2'
     # adjlist must be in the same column as adjlist above
-    assert rmg_species.adjlist ==    """
-                                     1 N u0 p1 c0 {2,T}
-                                     2 N u0 p1 c0 {1,T}
-                                     """
+    assert rmg_species.adjlist == """
+1 N u0 p1 c0 {2,T}
+2 N u0 p1 c0 {1,T}
+"""
     assert rmg_species.reactive is False
     assert rmg_species.observable is False
     assert rmg_species.SA_observable is False
