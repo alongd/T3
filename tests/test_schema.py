@@ -31,7 +31,8 @@ def test_T3Options_schema():
     """Test creating an instance of T3Options"""
     t3_options = T3Options(flux_adapter='RMG',
                            profiles_adapter='RMG',
-                           collision_violator_thermo=False,
+                           collision_violators_thermo=False,
+                           collision_violators_rates=False,
                            all_core_species=False,
                            all_core_reactions=False,
                            fit_missing_GAV=False,
@@ -43,7 +44,8 @@ def test_T3Options_schema():
                            )
     assert t3_options.flux_adapter == 'RMG'
     assert t3_options.profiles_adapter == 'RMG'
-    assert t3_options.collision_violator_thermo is False
+    assert t3_options.collision_violators_thermo is False
+    assert t3_options.collision_violators_rates is False
     assert t3_options.all_core_species is False
     assert t3_options.all_core_reactions is False
     assert t3_options.fit_missing_GAV is False
