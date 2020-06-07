@@ -756,7 +756,7 @@ class T3(object):
         """
         Add a species to self.species and to self.qm['species'].
         If the species already exists in self.species, only the reasons
-        will be extended, and the specie swill not be considered
+        will be extended, and the species will not be considered
         in self.qm['species'].
 
         Args:
