@@ -108,7 +108,7 @@ simpleReactor(
 """
     for reactor in reactors:
         if isinstance(reactor['T'], float):
-            temperature = f"({reactor['T']}, K)"
+            temperature = f"({reactor['T']}, 'K')"
         elif isinstance(reactor['T'], list):
             temperature = [(t, 'K') for t in reactor['T']]
         else:
@@ -135,7 +135,7 @@ simpleReactor(
 
         if reactor['type'] == 'gas batch constant T P':
             if isinstance(reactor['P'], float):
-                pressure = f"({reactor['P']}, bar)"
+                pressure = f"({reactor['P']}, 'bar')"
             elif isinstance(reactor['P'], list):
                 pressure = [(p, 'K') for p in reactor['P']]
             else:

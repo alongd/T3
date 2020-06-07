@@ -211,6 +211,9 @@ class T3(object):
         # check whether T3 should be restarted in the project directory
         iteration_start, run_rmg_at_start = self.restart()
 
+        # ARC species and reactions will be loaded again if restarting and they were already sent to ARC, set to list()
+        self.qm['species'], self.qm['reactions'] = list(), list()
+
         if iteration_start == 0 and self.qm['adapter'] == 'ARC' \
                 and (len(self.qm['species']) or len(self.qm['reactions'])):
             self.update_paths(iteration=iteration_start)
@@ -218,8 +221,7 @@ class T3(object):
             self.process_arc_run()
             # don't request these species and reactions again
             iteration_start += 1
-        # ARC species and reactions will be loaded again if restarting and they were already sent to ARC, set to list()
-        self.qm['species'], self.qm['reactions'] = list(), list()
+
 
         additional_calcs_required = False
 
@@ -295,8 +297,8 @@ class T3(object):
             'RMG input': os.path.join(iteration_path, 'RMG', 'input.py'),
             'RMG log': os.path.join(iteration_path, 'RMG', 'RMG.log'),
             'RMG coll vio': os.path.join(iteration_path, 'RMG', 'collision_rate_violators.log'),
-            'chem annotated': (iteration_path, 'RMG', 'chemkin', 'chem_annotated.inp'),
-            'species dict': (iteration_path, 'RMG', 'chemkin', 'species_dictionary.txt'),
+            'chem annotated': os.path.join(iteration_path, 'RMG', 'chemkin', 'chem_annotated.inp'),
+            'species dict': os.path.join(iteration_path, 'RMG', 'chemkin', 'species_dictionary.txt'),
             'SA': os.path.join(iteration_path, 'SA'),
             'SA solver': os.path.join(iteration_path, 'SA', 'solver'),
             'SA input': os.path.join(iteration_path, 'SA', 'input.py'),
@@ -652,6 +654,7 @@ class T3(object):
         species_keys = list()
 
         rmg_species, rmg_reactions = self.load_species_and_reactions_from_chemkin_file()
+        self.rmg_species = rmg_species
         self.logger.info(f'This RMG model has {len(rmg_species)} species and {len(rmg_reactions)} reactions in its core.')
 
         if self.t3['options']['all_core_species']:
@@ -662,6 +665,7 @@ class T3(object):
             # SA observables
             for input_species in self.rmg['species']:
                 if input_species['observable'] or input_species['SA_observable']:
+                    input_species = get_species_by_label(input_species['label'], self.rmg_species )
                     species_keys.append(self.add_species(species=input_species, reasons=['SA observable']))
             # SA
             species_keys.extend(self.determine_species_based_on_sa(rmg_species=rmg_species,
@@ -772,7 +776,7 @@ class T3(object):
         key = self.check_species_exists(species=species)
         if key is None:
             key = len(list(self.species.keys()))
-            qm_species = species.copy(deep=False)
+            qm_species = species.copy()
             legalize_species_label(species=qm_species)
             qm_species.label += f'_{key}'
             self.species[key] = {'RMG label': species.label,
