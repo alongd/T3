@@ -398,6 +398,12 @@ def test_determine_species_based_on_sa():
     assert species_keys == [0, 1, 2, 3, 4, 5, 6]
 
 
+def test_get_species_key_by_label():
+    """Test determining species to calculate based on sensitivity analysis"""
+    t3 = run_minimal()
+    t3.species = {5 : {'QM label' : 'O2'} }
+    key = t3.get_species_key_by_label('O2')
+    assert key == 5
 
 # spc1 = Species().from_smiles('CC')
 # spc1.thermo = HeatCapacityModel()
