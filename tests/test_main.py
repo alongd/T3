@@ -385,6 +385,18 @@ def test_legalize_species_label():
     assert species.label == 'C3H6'
 
 
+def test_determine_species_based_on_sa():
+    """Test determining species to calculate based on sensitivity analysis"""
+    t3 = run_minimal()
+    t3.paths['chem annotated'] = os.path.join(DATA_BASE_PATH, 'archive', 'iteration_1', 'chemkin', 'chem_annotated.inp')
+    t3.paths['species dict'] = os.path.join(DATA_BASE_PATH, 'archive', 'iteration_1', 'chemkin', 'species_dictionary.txt')
+    t3.paths['SA solver'] = os.path.join(DATA_BASE_PATH, 'archive', 'iteration_1', 'sa', 'solver')
+    t3.paths['PDep SA'] = os.path.join(DATA_BASE_PATH, 'archive', 'iteration_1', 'PDep_SA')
+    t3.qm['species'] = list()
+    rmg_species, rmg_reactions = t3.load_species_and_reactions_from_chemkin_file()
+    species_keys = t3.determine_species_based_on_sa(rmg_species, rmg_reactions)
+    assert species_keys == [0, 1, 2, 3, 4, 5, 6]
+
 
 
 # spc1 = Species().from_smiles('CC')
