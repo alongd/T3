@@ -775,7 +775,7 @@ class T3(object):
             qm_species = species.copy(deep=False)
             legalize_species_label(species=qm_species)
             qm_species.label += f'_{key}'
-            self.species[key] = {'RMG label': species.label.copy(),
+            self.species[key] = {'RMG label': species.label,
                                  'Chemkin label': species.to_chemkin(),
                                  'QM label': qm_species.label,
                                  'object': species,
