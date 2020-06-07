@@ -914,7 +914,7 @@ class T3(object):
         species_keys = list()
         if self.t3['sensitivity']['pdep_SA_thershold'] is None:
             return species_keys
-        if not os.path.isdir(self.paths['PDep SA']):
+        if not os.path.isdir(self.paths['RMG PDep']):
             os.mkdir(self.paths['PDep SA'])
 
         for reaction_tuple in pdep_rxns_to_explore:
