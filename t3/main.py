@@ -925,7 +925,7 @@ class T3(object):
 
             # identify the network name and file name
             network_file_names = list()
-            for (_, _, files) in os.walk(self.paths['RMD PDep']):
+            for (_, _, files) in os.walk(self.paths['PDep SA']):
                 network_file_names.extend(files)
                 break  # don't continue to explore subdirectories
             network_file_names = [network_file_name for network_file_name in network_file_names
