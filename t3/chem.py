@@ -67,6 +67,7 @@ class T3Species(ARCSpecies):
     def __init__(self,
                  label: Optional[str] = None,
                  qm_label: Optional[str] = None,
+                 species_dict: Optional[dict] = None,
                  # Source Tracking
                  thermo_method: Optional[Union[ThermoMethod, str]] = None,
                  thermo_source: Optional[str] = None,
@@ -87,6 +88,9 @@ class T3Species(ARCSpecies):
         self.label = label
         self.qm_label = qm_label
         self.thermo = thermo
+
+        if species_dict is not None:
+            self.from_dict(species_dict=species_dict)
 
         # Thermo Method Normalization
         if thermo_method is None:
@@ -115,6 +119,16 @@ class T3Species(ARCSpecies):
         self.rmg_index = rmg_index
         self.created_at_iteration = created_at_iteration
         self.reasons = [reasons] if isinstance(reasons, str) else reasons or []
+
+    def __repr__(self) -> str:
+        """
+        Readable representation for debugging logs.
+        Example: <T3Species 'CH4' (index: 1) [QM/CBS-QB3] status: converged>
+        """
+        method_str = f" {self.thermo_method.value}," if self.thermo_method else ""
+        index_str = f" (index: {self.t3_index})" if self.t3_index is not None else ""
+        status_val = self.t3_status.value if isinstance(self.t3_status, T3Status) else self.t3_status
+        return f"<T3Species '{self.label}'{index_str}{method_str} status: {status_val}>"
 
     @property
     def is_converged(self) -> bool:
@@ -164,38 +178,25 @@ class T3Species(ARCSpecies):
                 for m in species_dict['mol_list']
             ]
 
-        # Filter out keys that are not accepted by ARCSpecies.__init__
-        bad_keys = ['long_thermo_description', 'number_of_rotors']
-        for k in bad_keys:
-            species_dict.pop(k, None)
+        species_dict = remove_bad_arc_keys(species_dict)
 
         return cls(**t3_kwargs, **species_dict)
+
+    def copy(self):
+        """
+        Get a copy of this object instance.
+
+        Returns:
+            ARCSpecies: A copy of this object instance.
+        """
+        species_dict = self.as_dict(reset_atom_ids=True)
+        return self.__class__.from_dict(species_dict)
 
     def to_chemkin(self) -> str:
         """
         Return a Chemkin-compliant label for the species.
         """
         return to_chemkin_label(self)
-
-    def __repr__(self) -> str:
-        """
-        Readable representation for debugging logs.
-        Example: <T3Species 'CH4' (index: 1) [QM/CBS-QB3] status: converged>
-        """
-        if self.thermo_method:
-            method_str = f" [{self.thermo_method.value}"
-            if self.thermo_source:
-                method_str += f"/{self.thermo_source}"
-            method_str += "]"
-        elif self.thermo_source:
-            method_str = f" [Source: {self.thermo_source}]"
-        else:
-            method_str = ""
-
-        index_str = f" (index: {self.t3_index})" if self.t3_index is not None else ""
-        status_val = self.t3_status.value if isinstance(self.t3_status, T3Status) else self.t3_status
-        
-        return f"<T3Species '{self.label}'{index_str}{method_str} status: {status_val}>"
 
 
 class T3Reaction(ARCReaction):
@@ -384,3 +385,12 @@ class T3Reaction(ARCReaction):
                                  got: reactants: {smiles_r}
                                       products: {smiles_p}""")
         return "+".join(smiles_r)+"<=>"+".".join(smiles_p)
+
+
+def remove_bad_arc_keys(species_dict: dict) -> dict:
+    """
+    Remove keys from the species dict that ARC doesn't expect and would error on.
+    This is a temporary workaround until we refactor to separate T3 metadata from ARC attributes more cleanly.
+    """
+    bad_keys = {'original_label', 'long_thermo_description', 'cheap_conformer'}
+    return {k: v for k, v in species_dict.items() if k not in bad_keys}
