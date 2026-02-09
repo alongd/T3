@@ -10,8 +10,10 @@ from __future__ import annotations
 from enum import Enum
 from typing import Optional, Dict, Any, Union, List
 
-from arc.species.species import ARCSpecies
+from arc.species.species import ARCSpecies, rmg_mol_from_dict_repr
 from arc.reaction.reaction import ARCReaction
+
+from t3.common import to_chemkin_label
 
 
 class T3Status(str, Enum):
@@ -75,6 +77,7 @@ class T3Species(ARCSpecies):
                  rmg_index: Optional[int] = None,
                  created_at_iteration: int = 0,
                  reasons: Optional[Union[List[str], str]] = None,
+                 thermo: Optional[Any] = None,
                  # ARCSpecies arguments
                  *args,
                  **kwargs):
@@ -83,6 +86,7 @@ class T3Species(ARCSpecies):
 
         self.label = label
         self.qm_label = qm_label
+        self.thermo = thermo
 
         # Thermo Method Normalization
         if thermo_method is None:
@@ -123,14 +127,18 @@ class T3Species(ARCSpecies):
         Crucial for saving T3 state to YAML/JSON between restarts.
         """
         data = super().as_dict(reset_atom_ids=reset_atom_ids)
+        thermo_method_val = self.thermo_method.value if self.thermo_method else None
+        t3_status_val = self.t3_status.value if isinstance(self.t3_status, T3Status) else self.t3_status
         data.update({
-            "thermo_method": self.thermo_method,
+            "thermo_method": thermo_method_val,
             "thermo_source": self.thermo_source,
             "thermo_comment": self.thermo_comment,
-            "t3_status": self.t3_status,
+            "t3_status": t3_status_val,
             "t3_index": self.t3_index,
             "rmg_index": self.rmg_index,
             "created_at_iteration": self.created_at_iteration,
+            "reasons": self.reasons,
+            "qm_label": self.qm_label,
         })
         return data
 
@@ -140,16 +148,34 @@ class T3Species(ARCSpecies):
         Reconstruct a T3Species from a dictionary.
         Handles the separation of T3-specific args vs ARC args.
         """
-        # Extract T3 specific keys
         t3_keys = {
             "thermo_method", "thermo_source", "thermo_comment",
             "t3_status", "t3_index", "rmg_index", "created_at_iteration", "reasons",
             "qm_label",
         }
         t3_kwargs = {k: species_dict.pop(k) for k in t3_keys if k in species_dict}
-        
-        # Everything else goes to ARCSpecies via kwargs
+
+        is_ts = species_dict.get('is_ts', False)
+        if 'mol' in species_dict and isinstance(species_dict['mol'], dict):
+            species_dict['mol'] = rmg_mol_from_dict_repr(species_dict['mol'], is_ts=is_ts)
+        if 'mol_list' in species_dict and isinstance(species_dict['mol_list'], list):
+            species_dict['mol_list'] = [
+                rmg_mol_from_dict_repr(m, is_ts=is_ts) if isinstance(m, dict) else m
+                for m in species_dict['mol_list']
+            ]
+
+        # Filter out keys that are not accepted by ARCSpecies.__init__
+        bad_keys = ['long_thermo_description', 'number_of_rotors']
+        for k in bad_keys:
+            species_dict.pop(k, None)
+
         return cls(**t3_kwargs, **species_dict)
+
+    def to_chemkin(self) -> str:
+        """
+        Return a Chemkin-compliant label for the species.
+        """
+        return to_chemkin_label(self)
 
     def __repr__(self) -> str:
         """
@@ -167,7 +193,6 @@ class T3Species(ARCSpecies):
             method_str = ""
 
         index_str = f" (index: {self.t3_index})" if self.t3_index is not None else ""
-
         status_val = self.t3_status.value if isinstance(self.t3_status, T3Status) else self.t3_status
         
         return f"<T3Species '{self.label}'{index_str}{method_str} status: {status_val}>"
@@ -192,7 +217,7 @@ class T3Reaction(ARCReaction):
         product_keys (List[int]): T3 species indices of the products.
         is_pressure_dependent (bool): Whether the reaction is pressure-dependent.
     """
-    
+
     def __init__(self,
                  # Source Tracking
                  kinetics_method: Optional[Union[KineticsMethod, str]] = None,
@@ -248,6 +273,17 @@ class T3Reaction(ARCReaction):
         self.created_at_iteration = created_at_iteration
         self.reasons = [reasons] if isinstance(reasons, str) else reasons or []
 
+    def to_chemkin(self) -> str:
+        """
+        Return a Chemkin-compliant label for the reaction.
+        """
+        arrow = ' <=> ' if self.is_pressure_dependent is not False else ' = '
+        if self.r_species and self.p_species:
+            reactants_label = ' + '.join([r.to_chemkin() if hasattr(r, 'to_chemkin') else str(r) for r in self.r_species])
+            products_label = ' + '.join([p.to_chemkin() if hasattr(p, 'to_chemkin') else str(p) for p in self.p_species])
+            return f'{reactants_label}{arrow}{products_label}'
+        return self.label
+
     @property
     def is_converged(self) -> bool:
         """Helper to check if the reaction is effectively 'done'."""
@@ -259,13 +295,16 @@ class T3Reaction(ARCReaction):
                 ) -> dict:
         """
         Extended dictionary representation including T3 metadata.
+        Serializes Enums to string values to ensure clean YAML output.
         """
         data = super().as_dict(reset_atom_ids=reset_atom_ids, report_family=report_family)
+        kinetics_method_val = self.kinetics_method.value if self.kinetics_method else None
+        t3_status_val = self.t3_status.value if isinstance(self.t3_status, T3Status) else self.t3_status
         data.update({
-            "kinetics_method": self.kinetics_method,
+            "kinetics_method": kinetics_method_val,
             "kinetics_source": self.kinetics_source,
             "kinetics_comment": self.kinetics_comment,
-            "t3_status": self.t3_status,
+            "t3_status": t3_status_val,
             "t3_index": self.t3_index,
             "rmg_index": self.rmg_index,
             "created_at_iteration": self.created_at_iteration,
@@ -274,6 +313,7 @@ class T3Reaction(ARCReaction):
             "rmg_label": self.rmg_label,
             "reactant_keys": self.reactant_keys,
             "product_keys": self.product_keys,
+            "is_pressure_dependent": self.is_pressure_dependent,
         })
         return data
 
