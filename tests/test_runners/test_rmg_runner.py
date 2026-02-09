@@ -44,7 +44,7 @@ conda activate rmg_env
 
 touch initial_time
 
-python-jl $rmgpy_path/rmg.py -n 16 input.pyNone
+python $rmgpy_path/rmg.py -n 16 input.pyNone
 
 touch final_time
 
@@ -81,7 +81,7 @@ conda activate rmg_env
 
 touch initial_time
 
-python-jl $rmgpy_path/rmg.py -n 16 input.pyNone
+python $rmgpy_path/rmg.py -n 16 input.pyNone
 
 touch final_time
 
@@ -125,7 +125,7 @@ conda activate rmg_env
 
 touch initial_time
 
-python-jl $rmgpy_path/rmg.py -n 8 input.py-m 100
+python $rmgpy_path/rmg.py -n 8 input.py-m 100
 
 touch final_time
 

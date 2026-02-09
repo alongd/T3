@@ -10,13 +10,13 @@ import pandas as pd
 import shutil
 from typing import List, Optional, TYPE_CHECKING
 
-from rmgpy.kinetics.diffusionLimited import diffusion_limiter
-from rmgpy.rmg.listener import SimulationProfilePlotter, SimulationProfileWriter
-from rmgpy.rmg.settings import ModelSettings
-from rmgpy.solver.liquid import LiquidReactor
-from rmgpy.solver.simple import SimpleReactor
-from rmgpy.tools.loader import load_rmg_py_job
-from rmgpy.tools.plot import plot_sensitivity
+# from rmgpy.kinetics.diffusionLimited import diffusion_limiter
+# from rmgpy.rmg.listener import SimulationProfilePlotter, SimulationProfileWriter
+# from rmgpy.rmg.settings import ModelSettings
+# from rmgpy.solver.liquid import LiquidReactor
+# from rmgpy.solver.simple import SimpleReactor
+# from rmgpy.tools.loader import load_rmg_py_job
+# from rmgpy.tools.plot import plot_sensitivity
 
 from t3.common import get_chem_to_rmg_rxn_index_map, get_species_by_label, get_values_within_range, \
     get_observable_label_from_header, get_parameter_from_header, time_lapse
@@ -43,11 +43,11 @@ class RMGConstantTP(SimulateAdapter):
         observable_list (Optional[list]): Species used for SA. Entries are species labels as strings. Example: ['OH']
         sa_atol (float, optional): The absolute tolerance used when performing sensitivity analysis.
         sa_atol (float, optional): The relative tolerance used when performing sensitivity analysis.
-        global_observables (Optional[List[str]]): List of global observables ['IgD', 'ESR', 'SL'] used by Cantera adapters.
+        global_observables (Optional[List[str]]): List of global observables ['IDT', 'ESR', 'SL'] used by Cantera adapters.
 
     Attributes:
         atol (float): The absolute tolerance used when integrating during an RMG iteration.
-        global_observables (List[str]): List of global observables ['IgD', 'ESR', 'SL'] used by Cantera adapters.
+        global_observables (List[str]): List of global observables ['IDT', 'ESR', 'SL'] used by Cantera adapters.
         logger (Logger): Instance of T3's Logger class.
         observable_list (list): Species used for SA. Entries are species labels as strings. Example: ['OH']
         observable_species (list): Species object representations of the species used for SA.

@@ -288,7 +288,7 @@ class RMGReactor(BaseModel):
     P: Optional[Union[Annotated[float, Field(gt=0)], List[Annotated[float, Field(gt=0)]]]] = None
     V: Optional[Union[Annotated[float, Field(gt=0)], List[Annotated[float, Field(gt=0)]]]] = None
     termination_conversion: Optional[Dict[str, Annotated[float, Field(gt=0, lt=1)]]] = None
-    termination_time: Optional[List[Union[Annotated[float, Field(gt=0)], TerminationTimeEnum]]] = None
+    termination_time: Optional[Tuple[Annotated[float, Field(gt=0)], TerminationTimeEnum]] = None
     termination_rate_ratio: Optional[Annotated[float, Field(gt=0, lt=1)]] = None
     conditions_per_iteration: Annotated[int, Field(gt=0)] = 12
 
@@ -354,8 +354,8 @@ class RMGReactor(BaseModel):
             value[1] = TerminationTimeEnum.ms
         elif value[1] == TerminationTimeEnum.hrs:
             value[1] = TerminationTimeEnum.hours
-        value[1] = value[1].value  # convert the Enum class into a string
-        return list(value)
+        value = (value[0], value[1].value)  # convert the Enum class into a string
+        return value
 
 
 class RMGModel(BaseModel):
