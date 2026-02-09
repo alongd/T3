@@ -355,7 +355,7 @@ class RMGReactor(BaseModel):
         elif value[1] == TerminationTimeEnum.hrs:
             value[1] = TerminationTimeEnum.hours
         value[1] = value[1].value  # convert the Enum class into a string
-        return tuple(value)
+        return list(value)
 
 
 class RMGModel(BaseModel):
