@@ -172,14 +172,9 @@ class T3Species(ARCSpecies):
         is_ts = species_dict.get('is_ts', False)
         if 'mol' in species_dict and isinstance(species_dict['mol'], dict):
             species_dict['mol'] = rmg_mol_from_dict_repr(species_dict['mol'], is_ts=is_ts)
-        if 'mol_list' in species_dict and isinstance(species_dict['mol_list'], list):
-            species_dict['mol_list'] = [
-                rmg_mol_from_dict_repr(m, is_ts=is_ts) if isinstance(m, dict) else m
-                for m in species_dict['mol_list']
-            ]
 
+        species_dict['xyz'] = species_dict.get('final_xyz', None) or species_dict.get('initial_xyz', None)
         species_dict = remove_bad_arc_keys(species_dict)
-
         return cls(**t3_kwargs, **species_dict)
 
     def copy(self):
@@ -389,8 +384,75 @@ class T3Reaction(ARCReaction):
 
 def remove_bad_arc_keys(species_dict: dict) -> dict:
     """
-    Remove keys from the species dict that ARC doesn't expect and would error on.
-    This is a temporary workaround until we refactor to separate T3 metadata from ARC attributes more cleanly.
+    Remove keys from the species dict that ARC doesn't expect in __init__ and would error on.
+    Includes calculated results, internal state flags, and output geometries.
     """
-    bad_keys = {'original_label', 'long_thermo_description', 'cheap_conformer'}
+    bad_keys = {
+        # --- Attributes that are NOT Init Arguments ---
+
+        # Identity / Metadata
+        'original_label',
+        'index',
+        'symmetry_number',
+
+        # Calculated Energies & Properties
+        'e_elect',
+        'e0',
+        't1',
+        'zmat',
+        'bond_corrections',  # Warning: This IS an arg, but often calculated internally. Keep if you want to force it.
+        # If T3 re-calculates it, remove it. Usually safe to keep if valid dict.
+        # I'll leave it out of bad_keys for now, but watch out for it.
+
+        # Geometry & Conformer Results
+        'initial_xyz',  # Mapped to 'xyz' in from_dict, so remove original key
+        'final_xyz',  # Mapped to 'xyz' in from_dict, so remove original key
+        'conf_is_isomorphic',
+        'conformers',  # List of results
+        'conformer_energies',
+        'conformers_before_opt',
+        'cheap_conformer',
+        'most_stable_conformer',
+        'recent_md_conformer',
+        'rotors_dict',  # Complex internal dictionary
+        'number_of_rotors',
+        '_radius',
+        '_is_linear',
+        '_number_of_atoms',
+        'mol_list',  # Derived from mol
+
+        # Thermo / Transport Outputs
+        'thermo',  # Result object
+        'rmg_thermo',
+        'long_thermo_description',
+        'transport_data',
+
+        # Settings / Levels (Saved state, not always args)
+        'opt_level',
+        'freq_level',
+        'composite_level',
+        'scan_res',
+
+        # TS Specific Internal State
+        'ts_guesses',
+        'ts_report',
+        'ts_checks',
+        'ts_conf_spawned',
+        'tsg_spawned',
+        'ts_guesses_exhausted',
+        'successful_methods',
+        'unsuccessful_methods',
+        'chosen_ts',
+        'chosen_ts_list',
+        'chosen_ts_method',
+        'rxn_zone_atom_indices',
+
+        # Files / Paths
+        'arkane_file',
+        'checkfile',
+        'keep_mol',
+        'neg_freqs_trshed'
+    }
+
     return {k: v for k, v in species_dict.items() if k not in bad_keys}
+

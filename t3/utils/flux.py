@@ -435,17 +435,10 @@ def run_batch_p(gas: ct.Solution,
             break
         cantera_reaction_rops = gas.net_rates_of_progress
         for spc in gas.species():
-            dups = list()
             for i, rxn in enumerate(gas.reactions()):
                 if stoichiometry[spc.name][i]:
-                    if rxn.equation not in rops[spc.name].keys():
-                        rops[spc.name][rxn.equation] = list()
-                    if rxn.duplicate and rxn.equation in dups:
-                        rops[spc.name][rxn.equation][-1] += cantera_reaction_rops[i] * stoichiometry[spc.name][i]
-                    else:
-                        rops[spc.name][rxn.equation].append(cantera_reaction_rops[i] * stoichiometry[spc.name][i])
-                    if rxn.duplicate and rxn.equation not in dups:
-                        dups.append(rxn.equation)
+                    rops[spc.name][rxn.equation] = rops[spc.name].get(rxn.equation, 0.0) + \
+                        cantera_reaction_rops[i] * stoichiometry[spc.name][i]
         profile = {'P': gas.P, 'T': gas.T, 'X': {s.name: x for s, x in zip(gas.species(), gas.X)}, 'ROPs': rops}
         profiles[t] = profile
     return profiles
