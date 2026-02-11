@@ -724,7 +724,7 @@ class InputBase(BaseModel):
     verbose: Annotated[int, Field(ge=10, le=30, multiple_of=10)] = 20
     t3: Optional[T3] = Field(default_factory=T3)
     rmg: RMG
-    qm: Optional[QM] = Field(default_factory=QM)
+    qm: QM = Field(default_factory=QM)
 
     class Config:
         extra = "forbid"
