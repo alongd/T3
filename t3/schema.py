@@ -350,10 +350,9 @@ class RMGReactor(BaseModel):
             raise ValueError(f'The specified termination time must be a list of 2 entries: '
                              f'the value (a float) and the units (a string). Got: {value}')
         if value[1] == TerminationTimeEnum.micro_s:
-            value[0] *= 1000
-            value[1] = TerminationTimeEnum.ms
+            value= (value[0] * 1000, TerminationTimeEnum.ms)
         elif value[1] == TerminationTimeEnum.hrs:
-            value[1] = TerminationTimeEnum.hours
+            value = (value[0] ,TerminationTimeEnum.hours)
         value = (value[0], value[1].value)  # convert the Enum class into a string
         return value
 
