@@ -578,13 +578,13 @@ def test_determine_species_to_calculate():
                 for species in t3.species.values() if species.label not in ['H', 'OH']])
 
     # 4. SA observables
-    assert t3.species[0].label == 'H'
+    assert t3.species[0].label == 'H(3)'
     assert t3.species[0].reasons == \
            ['(i 3) Participates in a reaction for which a rate coefficient is computed.']
-    assert t3.species[3].label == 'CC=[C]CCCC'
+    assert t3.species[3].label == 'C7H13(920)'
     assert t3.species[3].reasons == \
            ['(i 3) Species participates in collision rate violating reaction: H(3)+C7H13(920)=C7H14(323)']
-    assert t3.species[10].label == '[CH2]CC(=C)[C]=C'
+    assert t3.species[10].label == 'C6H8(2027)'
     assert t3.species[10].reasons == \
            ['(i 3) Species participates in collision rate violating reaction: C6H8(2027)=C2H4(21)+C4H4(2531)']
 
@@ -665,7 +665,7 @@ def test_determine_species_based_on_collision_violators():
     """Test determining species to calculate based on collision rate violating reactions"""
     t3 = run_minimal()
     t3.paths['RMG coll vio'] = os.path.join(TEST_DATA_BASE_PATH, 'collision_rate_violators', 'collision_rate_violators.log')
-    t3.paths['chem annotated'] = os.path.join(TEST_DATA_BASE_PATH, 'collision_rate_violators', 'chem_annotated.inp')
+    t3.paths['cantera annotated'] = os.path.join(TEST_DATA_BASE_PATH, 'collision_rate_violators', 'cantera', 'chem_annotated.yaml')
     t3.paths['species dict'] = os.path.join(TEST_DATA_BASE_PATH, 'collision_rate_violators', 'species_dictionary.txt')
     t3.rmg_species, t3.rmg_reactions = t3.load_species_and_reactions_from_yaml_file()
     species_to_calc = t3.determine_species_and_reactions_based_on_collision_violators()[0]
