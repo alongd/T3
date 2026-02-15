@@ -109,9 +109,11 @@ def load_cantera_yaml_file(path: str,
                              products=products_labels,
                              r_species=reactants,
                              p_species=products,
+                             kinetics=kinetics,
                              kinetics_method=kinetics_method,
                              kinetics_source=kinetics_source,
-                             kinetics_comment=note)
+                             kinetics_comment=note,
+                             )
             if len(reactions_list) < 5:
                 logging.warning(f"DEBUG: Parsed T3Reaction type: {type(rxn)}")
             if '<=>' in equation:
