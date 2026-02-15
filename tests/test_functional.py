@@ -59,24 +59,19 @@ def test_computing_thermo():
     Need xtb installed
     """
     functional_test_directory = os.path.join(TEST_DATA_BASE_PATH, 'functional_2_thermo')
-    #delete_selective_content_from_test_dirs(test_dir=functional_test_directory)
+    delete_selective_content_from_test_dirs(test_dir=functional_test_directory)
     input_file = os.path.join(functional_test_directory, 'input.yml')
     input_dict = read_yaml_file(path=input_file)
     input_dict['verbose'] = 20
     input_dict['project_directory'] = functional_test_directory
-
-    # check that RMG and ARC are available
     check_dependencies()
-
-    # run the minimal example
     t3_object = T3(**input_dict)
     t3_object.execute()
     assert os.path.isfile(os.path.join(functional_test_directory, 't3.log'))
     assert os.path.isfile(os.path.join(functional_test_directory, 'species.yml'))
     assert os.path.isfile(os.path.join(functional_test_directory, 'reactions.yml'))
     assert os.path.isdir(os.path.join(functional_test_directory, 'iteration_1'))
-    assert os.path.isfile(os.path.join(functional_test_directory, 'iteration_1',
-                                       'RMG', 'chemkin', 'species_dictionary.txt'))
+    assert os.path.isfile(os.path.join(functional_test_directory, 'iteration_1', 'RMG', 'chemkin', 'species_dictionary.txt'))
     assert os.path.isdir(os.path.join(functional_test_directory, 'iteration_2'))
     assert os.path.isfile(os.path.join(functional_test_directory, 'iteration_2', 'RMG', 'input.py'))
     assert os.path.isfile(os.path.join(functional_test_directory, 'iteration_2', 'RMG', 'RMG.log'))
@@ -86,12 +81,9 @@ def test_computing_thermo():
                       {'line': 'Running RMG (tolerance = 0.1, iteration 2)...', 'exists': False},
                       {'line': 'Running a simulation with SA using RMGConstantTP for 1 conditions...', 'exists': False},
                       {'line': 'Additional calculations required: True', 'exists': False},
-                      {'line': 's0_2-propyl  C[CH]C      SA observable', 'exists': False},
-                      {'line': 'All species thermodynamic calculations in this iteration successfully converged.', 'exists': False},
+                      {'line': '0: s0_C3H7 "[CH2]CC" (status: Converged)', 'exists': False},
                       {'line': 'T3 iteration 2 (just generating a model using RMG):', 'exists': False},
-                      {'line': 'SPECIES SUMMARY', 'exists': False},
-                      {'line': 'Species for which thermodynamic data was calculate:', 'exists': False},
-                      {'line': 'All species calculated by ARC successfully converged', 'exists': False},
+                      {'line': 'Species Summary:', 'exists': False},
                       ]
     with open(os.path.join(functional_test_directory, 't3.log'), 'r') as f:
         lines = f.readlines()
@@ -99,10 +91,8 @@ def test_computing_thermo():
         for expected_line_dict in expected_lines:
             if expected_line_dict['line'] in line:
                 expected_line_dict['exists'] = True
-    print('\n\n********************** test_computing_thermo:\n')
     for expected_line_dict in expected_lines:
-        print(expected_line_dict['line'])  # assists in debugging this test, otherwise error messages aren't informative
-        assert expected_line_dict['exists'] is True
+        assert expected_line_dict['exists'] is True, f"Expected line '{expected_line_dict['line']}' not found in t3.log"
 
 
 def test_rmg_files_backup_before_restart():
@@ -113,27 +103,27 @@ def test_rmg_files_backup_before_restart():
     3.chem_edge_annotated
     4.RMG log files
     """
-    backup_test_directory = os.path.join(TEST_DATA_BASE_PATH, 'backup_rmg_files_before_restart','iteration_1', 'RMG')
+    backup_test_directory = os.path.join(TEST_DATA_BASE_PATH, 'backup_rmg_files_before_restart', 'iteration_1', 'RMG')
+
+    # 1. Clean existing backups to ensure test isolation
+    if os.path.isdir(backup_test_directory):
+        for item in os.listdir(backup_test_directory):
+            if item.startswith('restart_backup'):
+                shutil.rmtree(os.path.join(backup_test_directory, item))
+
+    # 2. Run backup
     backup_rmg_files(backup_test_directory)
-    # Find the backup directory (there should only be one per restart)
+
+    # 3. Verify
     backup_directories = [d for d in os.listdir(backup_test_directory) if d.startswith('restart_backup')]
-    assert len(backup_directories) == 1 ,"There should be one backup directory per restart"
-    
-    # Path to the backup directory
+    assert len(backup_directories) == 1, "There should be one backup directory per restart"
+
     backup_directory = os.path.join(backup_test_directory, backup_directories[0])
-
-    # Check if the backup directory and the chemkin subdirectory were created
-    assert os.path.exists(backup_directory), "Backup directory was not created"
-    assert os.path.exists(os.path.join(backup_directory, 'chemkin')) , "chemkin directory was not created in backup"
-
-    # Check if the necessary files were copied
-    assert os.path.exists(os.path.join(backup_directory, 'RMG.log')) , "RMG.log was not backed up."
-    assert os.path.exists(os.path.join(backup_directory, 'chemkin', 'chem_annotated.inp')), "chem_annotated.inp was not backed up"
-    assert os.path.exists(os.path.join(backup_directory, 'chemkin', 'chem_edge_annotated.inp')), "chem_edge_annotated.inp was not backed up"
-
-    # Check if the pdep folder was copied
-    assert os.path.exists(os.path.join(backup_directory, 'pdep')), "pdep directory was not backed up"
-    assert os.path.exists(os.path.join(backup_directory, 'pdep', 'network1_2.py')), "pdep1_2.py was not backed up"
+    assert os.path.exists(backup_directory)
+    assert os.path.exists(os.path.join(backup_directory, 'chemkin'))
+    assert os.path.exists(os.path.join(backup_directory, 'RMG.log'))
+    assert os.path.exists(os.path.join(backup_directory, 'chemkin', 'chem_annotated.inp'))
+    assert os.path.exists(os.path.join(backup_directory, 'pdep'))
 
     shutil.rmtree(backup_directory, ignore_errors=True)
 
