@@ -100,7 +100,8 @@ class T3(object):
                  verbose: int = 20,
                  clean_dir: bool = False,
                  ):
-
+        t3 = t3 or {}
+        qm = qm or {}
         self.sa_dict = None
         self.sa_observables = list()
         self.t0 = datetime.datetime.now()  # initialize the timer as datetime object
@@ -215,7 +216,7 @@ class T3(object):
             self.process_arc_run()
             # don't request these species and reactions again
             iteration_start += 1
-        # ARC species and reactions will be loaded again if restarting and they were already sent to ARC, set to list()
+        # ARC species and reactions will be loaded again if restarting and if they were already sent to ARC
         self.qm['species'], self.qm['reactions'] = list(), list()
 
         additional_calcs_required = False
@@ -626,11 +627,8 @@ class T3(object):
             coll_vio_spc_keys, coll_vio_rxn_keys = self.determine_species_and_reactions_based_on_collision_violators()
 
         if self.t3['options']['all_core_species']:
-            print('all_core_species option is on, adding all core species for refinement.')
             for species in self.rmg_species:
-                print(f'considering {species.label}, requires refinement = {self.species_requires_refinement(species=species)}')
                 if self.species_requires_refinement(species=species):
-                    print(f'Adding {species} for refinement since it is in the core and all_core_species option is on.')
                     key = self.add_species(species=species, reasons=[f'(i {self.iteration}) All core species'])
                     if key is not None:
                         species_keys.append(key)
@@ -964,7 +962,7 @@ class T3(object):
                 products = [get_species_by_label(label, self.rmg_species) for label in product_labels]
                 if not len(reactants) or not len(products):
                     self.logger.error(f'Could not identify reaction {rxn_to_log}!')
-                reaction = T3Reaction(reactants=reactants, products=products)
+                reaction = T3Reaction(r_species=reactants, p_species=products)
                 if self.reaction_requires_refinement(reaction) \
                         and not any(self.species_requires_refinement(species=spc) for spc in reactants + products):
                     # only consider a rate violating reaction if all the thermo was first fixed
@@ -1120,56 +1118,8 @@ class T3(object):
         if label_type not in ['RMG', 'Chemkin', 'QM', 'SMILES']:
             raise ValueError(f"label type must be either 'RMG', 'Chemkin' or 'QM', got: '{label_type}'.")
         for key, t3_reaction in self.reactions.items():
-            # Basic check: verify arrow/reversibility matches if desired, but mainly product/reactant match
-            # Since is_isomorphic was removed from T3Reaction, we implement a check here:
-            
-            # Helper to check lists of species
-            def check_species_lists(list1, list2):
-                if len(list1) != len(list2):
-                    return False
-                l2 = list(list2)
-                for s1 in list1:
-                    match = None
-                    for s2 in l2:
-                        # Use label comparison as fallback for now since T3Species.is_isomorphic was likely removed too?
-                        # Or if T3Species has .mol, we could use that.
-                        # The user revert diff showed T3Species.is_isomorphic removed too.
-                        # So we rely on labels or .mol if available?
-                        # Let's try to match by label first, as that's what was in the revert 'return self.label == other.label'
-                        if s1.label == s2.label:
-                            match = s2
-                            break
-                        # If labels don't match, check mol if valid?
-                        # For now, stick to label matching as primary to be safe/simple, 
-                        # or re-implement the mol check if needed.
-                        # Actually, ARC species equality checks might already be robust? 
-                        # But s1 == s2 might be object identity.
-                        # Let's use label for now.
-                    if match:
-                        l2.remove(match)
-                    else:
-                        return False
-                return True
-
-            r_match = check_species_lists(reaction.r_species, t3_reaction.r_species)
-            p_match = check_species_lists(reaction.p_species, t3_reaction.p_species)
-            
-            # Check forward
-            if r_match and p_match:
+            if reaction is not None and reaction.is_isomorphic(t3_reaction):
                  return key
-
-            # Check reverse if reversible (T3Reaction defaults to reversible usually?)
-            # Simplified reverse check:
-            r_rev_match = check_species_lists(reaction.r_species, t3_reaction.p_species)
-            p_rev_match = check_species_lists(reaction.p_species, t3_reaction.r_species)
-            if r_rev_match and p_rev_match:
-                return key
-
-            # if reaction is not None and reaction.is_isomorphic(t3_reaction):
-            #    return key
-            if reaction is not None:
-                # The inline check above covers it.
-                pass
             if label is not None:
                 if label_type == 'QM' and label == t3_reaction.qm_label:
                     return key
@@ -1194,10 +1144,8 @@ class T3(object):
         """
         species, reactions = [], []
         try:
-            print(f'file path: {self.paths["cantera annotated"]}')
             species, reactions = load_cantera_yaml_file(self.paths['cantera annotated'],
                                                         species_dict_path=self.paths['species dict'])
-            print(f'Loaded {len(species)} species and {len(reactions)} reactions from the Cantera YAML file.')
         except Exception as e:
             self.logger.error(f"Could not read the Cantera YAML file {self.paths['cantera annotated']}! Got: {e}")
         return species, reactions
@@ -1217,16 +1165,6 @@ class T3(object):
         Returns:
             Optional[int]: The species index if added, ``None`` otherwise.
         """
-        print(f'Adding species {species.label} for the following reason(s): {reasons}')
-        if not isinstance(species, T3Species):
-            # Convert to T3Species
-            # Use as_dict() to get ARCSpecies properties, then init T3Species
-            spc_dict = species.as_dict()
-            # Remove T3-specific keys if they happen to be in dict (unlikely if coming from ARCSpecies)
-            # but ensure we don't duplicate args if passing *kwargs
-            # T3Species init handles ARCSpecies args via **kwargs
-            species = T3Species(**spc_dict)
-
         reasons = [reasons] if isinstance(reasons, str) else reasons
         key = self.get_species_key(species=species)
         if key is None:
@@ -1516,17 +1454,6 @@ def get_species_with_qm_label(species: T3Species,
         Add tests.
     """
     qm_species = species.copy()
-    print(f'*** type: {type(qm_species)}, label: {qm_species.label}')
-    if not isinstance(qm_species, T3Species):
-        # Cast back to T3Species if copy() returned ARCSpecies
-        # We must preserve T3 status for species_requires_refinement check
-        # spc_dict = remove_bad_arc_keys(qm_species.as_dict())
-        qm_species = T3Species(species_dict=spc_dict)
-        qm_species.t3_status = getattr(species, 't3_status', T3Status.PENDING)
-        qm_species.thermo_method = getattr(species, 'thermo_method', None)
-        qm_species.thermo_source = getattr(species, 'thermo_source', None)
-        qm_species.thermo_comment = getattr(species, 'thermo_comment', "")
-
     legalize_species_label(species=qm_species)
     qm_species.label = f's{key}_{qm_species.label}'
 
