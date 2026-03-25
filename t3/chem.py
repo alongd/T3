@@ -50,49 +50,72 @@ class T3Species(ARCSpecies):
     """
     A wrapper for ARCSpecies that tracks T3 workflow metadata.
 
+    Args:
+        label (str): The species label as parsed from RMG.
+        key (int, optional): A unique integer identifier for the species. If None, it will be auto-assigned.
+        species_dict (dict, optional): A dictionary representation of the species, used for reconstruction.
+        thermo_method (ThermoMethod or str, optional): The high-level category of the thermo source. Can be a
+                                                       ThermoMethod enum or a string that will be cast to the enum.
+        thermo_source (str, optional): The specific details of the source.
+        thermo_comment (str, optional): The raw RMG thermo comment.
+        t3_status (T3Status or str, optional): Current workflow status. Can be a T3Status enum or a string that will be
+                                               cast to the enum if possible. Defaults to PENDING.
+        created_at_iteration (int, optional): The T3 iteration number where this species first appeared. Default: 0.
+        reasons (List[str] or str, optional): Reasons for calculating this species. Can  a list of strings or a single
+                                              string that will be converted into a list.
+        thermo (Any, optional): The thermodynamic data object.
+
     Attributes:
-        thermo_method (ThermoMethod): The high-level category of the thermo source.
-        thermo_source (str): The specific details of the source.
-                             If a non-standard method string is provided at init,
-                             it is prepended here and method becomes UNKNOWN.
-        thermo_comment (str): A verbose, formatted string for the final RMG library output.
-        t3_status (T3Status): Current workflow status.
-        t3_index (int): Permanent unique ID within this T3 run (0, 1, 2...).
-        rmg_index (int): Transient ID from the most recent RMG model generation.
-        created_at_iteration (int): The T3 iteration number where this species first appeared.
-        reasons (List[str]): Reasons for calculating this species.
-        qm_label (str): The species label used for QM calculations.
+        key (int): The unique integer identifier for the species within the T3 workflow.
+        qm_label (str): The standardized label used for QM calculations, formatted as 's{key}_{formula}'.
+        rmg_label (Dict[int, str]): A history dictionary mapping iteration numbers to the species label
+                                    assigned by RMG (e.g., {0: "CH4(10)"}).
+        formula (str): The chemical formula of the species.
+        thermo_method (ThermoMethod): The high-level category of the thermodynamic data source.
+        thermo_source (str): The specific details of the thermodynamic data source.
+                             If a non-standard method string was provided, it is prepended here.
+        thermo_comment (str): The raw RMG thermo comment or metadata.
+        t3_status (T3Status): The current status of the species in the T3 workflow (e.g., CONVERGED, FAILED).
+        created_at_iteration (int): The T3 iteration number where this species was first identified.
+        reasons (List[str]): A list of strings explaining why this species was selected for calculation.
+        thermo (Any): The thermodynamic data object (e.g., an RMG ThermoData object).
     """
+
+    _index_counter = 0
 
     def __init__(self,
                  label: Optional[str] = None,
-                 qm_label: Optional[str] = None,
+                 key: Optional[int] = None,
                  species_dict: Optional[dict] = None,
-                 # Source Tracking
                  thermo_method: Optional[Union[ThermoMethod, str]] = None,
                  thermo_source: Optional[str] = None,
                  thermo_comment: str = "",
-                 # T3 State
                  t3_status: Union[T3Status, str] = T3Status.PENDING,
-                 t3_index: Optional[int] = None,
-                 rmg_index: Optional[int] = None,
                  created_at_iteration: int = 0,
                  reasons: Optional[Union[List[str], str]] = None,
                  thermo: Optional[Any] = None,
-                 # ARCSpecies arguments
                  *args,
                  **kwargs):
 
         super().__init__(label=label, *args, **kwargs)
 
-        self.label = label
-        self.qm_label = qm_label
+        if key is None:
+            self.key = T3Species._index_counter
+            T3Species._index_counter += 1
+        else:
+            self.key = key
+            if key >= T3Species._index_counter:
+                T3Species._index_counter = key + 1
+
+        self.created_at_iteration = created_at_iteration
+        self.rmg_label : Dict[int, str] = {self.created_at_iteration: label}
+        self.formula = self.mol.get_formula()
+        self.qm_label = f"s{self.key}_{self.formula}"
         self.thermo = thermo
 
         if species_dict is not None:
             self.from_dict(species_dict=species_dict)
 
-        # Thermo Method Normalization
         if thermo_method is None:
             self.thermo_method: Optional[ThermoMethod] = None
             self.thermo_source = thermo_source
@@ -100,35 +123,43 @@ class T3Species(ARCSpecies):
             self.thermo_method = thermo_method
             self.thermo_source = thermo_source
         else:
-            # Try to cast string to Enum
             try:
                 self.thermo_method = ThermoMethod(thermo_method)
                 self.thermo_source = thermo_source
             except ValueError:
-                # Fallback: unknown string -> UNKNOWN enum, preserve raw string in source
                 self.thermo_method = ThermoMethod.UNKNOWN
                 self.thermo_source = f"[{thermo_method}] {thermo_source}" if thermo_source else thermo_method
 
         try:
             self.t3_status = T3Status(t3_status)
         except ValueError:
-            self.t3_status = T3Status.PENDING
+            try:
+                self.t3_status = T3Status(t3_status.lower())
+            except (ValueError, AttributeError):
+                self.t3_status = T3Status.PENDING
 
         self.thermo_comment = thermo_comment
-        self.t3_index = t3_index
-        self.rmg_index = rmg_index
-        self.created_at_iteration = created_at_iteration
         self.reasons = [reasons] if isinstance(reasons, str) else reasons or []
 
     def __repr__(self) -> str:
         """
-        Readable representation for debugging logs.
-        Example: <T3Species 'CH4' (index: 1) [QM/CBS-QB3] status: converged>
+        Return a readable representation of the T3Species object for debugging.
+        Example: <T3Species 's5_CH4' [QM] status: Converged>
         """
-        method_str = f" {self.thermo_method.value}," if self.thermo_method else ""
-        index_str = f" (index: {self.t3_index})" if self.t3_index is not None else ""
-        status_val = self.t3_status.value if isinstance(self.t3_status, T3Status) else self.t3_status
-        return f"<T3Species '{self.label}'{index_str}{method_str} status: {status_val}>"
+        label = getattr(self, 'qm_label', self.label)
+        method_str = ""
+        if self.thermo_method:
+            val = self.thermo_method.value if hasattr(self.thermo_method, 'value') else str(self.thermo_method)
+            method_str = f" [{val}]"
+        status_val = "Unknown"
+        if self.t3_status:
+             status_val = self.t3_status.value if hasattr(self.t3_status, 'value') else str(self.t3_status)
+        return f"<T3Species '{label}'{method_str} status: {status_val}>"
+
+    @classmethod
+    def reset_counter(cls):
+        """Resets the global index counter."""
+        cls._index_counter = 0
 
     @property
     def is_converged(self) -> bool:
@@ -144,38 +175,46 @@ class T3Species(ARCSpecies):
         thermo_method_val = self.thermo_method.value if self.thermo_method else None
         t3_status_val = self.t3_status.value if isinstance(self.t3_status, T3Status) else self.t3_status
         data.update({
+            "key": self.key,
+            "qm_label": self.qm_label,
+            "rmg_label": self.rmg_label,
             "thermo_method": thermo_method_val,
             "thermo_source": self.thermo_source,
             "thermo_comment": self.thermo_comment,
             "t3_status": t3_status_val,
-            "t3_index": self.t3_index,
-            "rmg_index": self.rmg_index,
             "created_at_iteration": self.created_at_iteration,
             "reasons": self.reasons,
-            "qm_label": self.qm_label,
         })
         return data
 
     @classmethod
-    def from_dict(cls, species_dict: Dict[str, Any]) -> T3Species:
+    def from_dict(cls, species_dict: Dict[str, Any]) -> 'T3Species':
         """
         Reconstruct a T3Species from a dictionary.
-        Handles the separation of T3-specific args vs ARC args.
         """
         t3_keys = {
-            "thermo_method", "thermo_source", "thermo_comment",
-            "t3_status", "t3_index", "rmg_index", "created_at_iteration", "reasons",
+            "key",
+            "rmg_label",
+            "thermo_method",
+            "thermo_source",
+            "thermo_comment",
+            "t3_status",
+            "created_at_iteration",
+            "reasons",
             "qm_label",
         }
         t3_kwargs = {k: species_dict.pop(k) for k in t3_keys if k in species_dict}
-
+        rmg_label_history = t3_kwargs.pop("rmg_label", None)
+        t3_kwargs.pop("qm_label", None)
         is_ts = species_dict.get('is_ts', False)
         if 'mol' in species_dict and isinstance(species_dict['mol'], dict):
             species_dict['mol'] = rmg_mol_from_dict_repr(species_dict['mol'], is_ts=is_ts)
-
         species_dict['xyz'] = species_dict.get('final_xyz', None) or species_dict.get('initial_xyz', None)
         species_dict = remove_bad_arc_keys(species_dict)
-        return cls(**t3_kwargs, **species_dict)
+        instance = cls(**t3_kwargs, **species_dict)
+        if rmg_label_history:
+            instance.rmg_label = {int(k): v for k, v in rmg_label_history.items()}
+        return instance
 
     def copy(self):
         """
@@ -192,6 +231,17 @@ class T3Species(ARCSpecies):
         Return a Chemkin-compliant label for the species.
         """
         return to_chemkin_label(self)
+
+    def to_species_dictionary_entry(self) -> str:
+        """
+        Formats the species for the dictionary.txt file.
+        Output format:
+        s14_C2H4 (S(842))
+        1 C u0 p0 c0 {2,D} {3,S} {4,S} ...
+        """
+        history_str = ", ".join([f"Iter {k}: {v}" for k, v in self.rmg_label.items()])
+        header = f"{self.qm_label} ({history_str})"
+        return f"{header}\n{self.adjlist}"
 
 
 class T3Reaction(ARCReaction):
@@ -242,7 +292,6 @@ class T3Reaction(ARCReaction):
         self.product_keys = product_keys
         self.is_pressure_dependent = is_pressure_dependent
 
-        # Kinetics Method Normalization
         if kinetics_method is None:
             self.kinetics_method: Optional[KineticsMethod] = None
             self.kinetics_source = kinetics_source
@@ -323,27 +372,17 @@ class T3Reaction(ARCReaction):
         This separates T3-specific metadata (passed to __init__) from
         standard ARC attributes (loaded via ARCReaction.from_dict).
         """
-        # 1. Define T3-specific keys to extract for __init__
         t3_keys = {
             "kinetics_method", "kinetics_source", "kinetics_comment",
             "t3_status", "t3_index", "rmg_index", "created_at_iteration", "reasons",
             "qm_label", "rmg_label", "reactant_keys", "product_keys",
             "rmg_reaction_family",
         }
-
-        # 2. Extract T3 kwargs (removing them from dict so ARC doesn't see them)
         t3_kwargs = {}
         for k in t3_keys:
             if k in reaction_dict:
                 t3_kwargs[k] = reaction_dict.pop(k)
-
-        # 3. Instantiate the T3Reaction
-        # We pass T3 args here. ARC args are left for the loader below.
         obj = cls(**t3_kwargs, **reaction_dict)
-
-        # 4. Populate standard ARC attributes
-        # We explicitly call the parent class's instance method on the new object.
-        # This preserves the logic for linking 'species_list' to reactants/products.
         ARCReaction.from_dict(obj, reaction_dict, species_list=species_list)
 
         return obj
@@ -380,6 +419,50 @@ class T3Reaction(ARCReaction):
                                  got: reactants: {smiles_r}
                                       products: {smiles_p}""")
         return "+".join(smiles_r)+"<=>"+".".join(smiles_p)
+
+    def is_isomorphic(self, other: 'T3Reaction') -> bool:
+        """
+        Check if this reaction is isomorphic to another reaction.
+        Two reactions are isomorphic if they have the same reactants and products
+        (considering species isomorphism), regardless of order.
+        
+        Args:
+            other (T3Reaction): The other reaction to compare with.
+            
+        Returns:
+            bool: True if reactions are isomorphic, False otherwise.
+        """
+        if not isinstance(other, T3Reaction):
+            return False
+
+        if len(self.r_species) != len(other.r_species) or len(self.p_species) != len(other.p_species):
+            return False
+
+        for r_spc in self.r_species:
+            found_match = False
+            for other_r_spc in other.r_species:
+                if hasattr(r_spc, 'is_isomorphic') and r_spc.is_isomorphic(other_r_spc):
+                    found_match = True
+                    break
+                elif hasattr(r_spc, 'label') and hasattr(other_r_spc, 'label') and r_spc.label == other_r_spc.label:
+                    found_match = True
+                    break
+            if not found_match:
+                return False
+
+        for p_spc in self.p_species:
+            found_match = False
+            for other_p_spc in other.p_species:
+                if hasattr(p_spc, 'is_isomorphic') and p_spc.is_isomorphic(other_p_spc):
+                    found_match = True
+                    break
+                elif hasattr(p_spc, 'label') and hasattr(other_p_spc, 'label') and p_spc.label == other_p_spc.label:
+                    found_match = True
+                    break
+            if not found_match:
+                return False
+        
+        return True
 
 
 def remove_bad_arc_keys(species_dict: dict) -> dict:
@@ -455,4 +538,3 @@ def remove_bad_arc_keys(species_dict: dict) -> dict:
     }
 
     return {k: v for k, v in species_dict.items() if k not in bad_keys}
-

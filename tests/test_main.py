@@ -596,14 +596,38 @@ def test_reaction_requires_refinement():
                      set_paths=True,
                      )
     reactions = t3.load_species_and_reactions_from_yaml_file()[1]
-    rxn_100_kinetic_comment = """Estimated using an average for rate rule [C/H2/NonDeC;C_rad/H/NonDeC]
-Euclidian distance = 0
-Multiplied by reaction path degeneracy 4.0
-family: H_Abstraction"""
-    print(reactions[100].kinetics_method)
-    print(reactions[100].kinetics_source)
-    print(reactions[100].kinetics_comment)
-    assert rxn_100_kinetic_comment == reactions[100].kinetics.comment
+
+    assert reactions[10].kinetics_method.value == 'Library'
+    assert reactions[10].kinetics_source == 'JetSurF2.0'
+    assert reactions[10].kinetics_comment.strip() == """Reaction index: Chemkin #30; RMG #4278
+Library reaction: JetSurF2.0
+Flux pairs: PC4H9(191), C4H8(197); CH3(23), CH4(31);"""
+
+    assert reactions[50].kinetics_method.value == 'Library'
+    assert reactions[50].kinetics_source == 'JetSurF2.0'
+    assert reactions[50].kinetics_comment.strip() == """Reaction index: Chemkin #76; RMG #4237
+Library reaction: JetSurF2.0
+Flux pairs: IC3H7(102), C3H6(104); H(2), H2(4);"""
+
+    assert reactions[80].kinetics_method.value == 'Rate Rules'
+    assert reactions[80].kinetics_source == 'Disproportionation'
+    assert reactions[80].kinetics_comment.strip() == """Reaction index: Chemkin #114; RMG #6134
+Template reaction: Disproportionation
+Flux pairs: S(842), fuel(1); C2H5(52), C2H4(22); 
+Estimated from node Root_N-4R->H_4CNOS-u1_N-1R!H->O_N-4CNOS->O_Ext-4CNS-R_N-Sp-5R!H#4CCCNNNSSS_N-2R!H->S_N-5R!H->O_Sp-5CS-4CCNSS_Ext-4CNS-R
+Multiplied by reaction path degeneracy 3.0"""
+
+    assert reactions[100].kinetics_method.value == 'Library'
+    assert reactions[100].kinetics_source == 'JetSurF2.0'
+    assert reactions[100].kinetics_comment.strip() == """Reaction index: Chemkin #141; RMG #4977
+Library reaction: JetSurF2.0
+Flux pairs: fuel(1), S(838); H(2), H2(4);"""
+
+    assert reactions[120].kinetics_method.value == 'Library'
+    assert reactions[120].kinetics_source == 'JetSurF2.0'
+    assert reactions[120].kinetics_comment.strip() == """Reaction index: Chemkin #163; RMG #4413
+Library reaction: JetSurF2.0
+Flux pairs: C5H11(428), C5H10(431); H(2), H2(4);"""
 
 
 def test_determine_species_based_on_sa():
@@ -756,7 +780,7 @@ def test_load_species_and_reactions_from_yaml_file():
                      )
     rmg_species, rmg_reactions = t3.load_species_and_reactions_from_yaml_file()
     assert len(rmg_species) == 12
-    assert len(rmg_reactions) == 18
+    assert len(rmg_reactions) == 17
     assert rmg_species[0].label == 'Ar'
     assert rmg_species[10].label == 'H2O'
     assert str(rmg_reactions[0]) == 'H(3) + H(3) <=> H2(1)'
@@ -869,20 +893,18 @@ def test_add_reaction():
     assert t3.reactions[2].created_at_iteration == 1
 
     # check that reactant and product labels of an RMG reaction are set correctly when adding a reaction
+    h_species = T3Species(label='H', smiles='[H]', thermo=ThermoData(comment='comment 1'))
+    ch4_species = T3Species(label='CH4', smiles='C', thermo=ThermoData(comment='comment 2'))
+    ch3_species = T3Species(label='CH3', smiles='[CH3]', thermo=ThermoData(comment='comment 3'))
+    h2_species = T3Species(label='H2', smiles='[H][H]', thermo=ThermoData(comment='comment 4'))
+    
     rmg_rxn_1 = T3Reaction(label='H + CH4 <=> CH3 + H2',
-                         reactants=[T3Species(label='H', smiles='[H]',
-                                               thermo=ThermoData(comment='comment 1')),
-                                    T3Species(label='CH4', smiles='C',
-                                               thermo=ThermoData(comment='comment 2'))],
-                         products=[T3Species(label='CH3', smiles='[CH3]',
-                                              thermo=ThermoData(comment='comment 3')),
-                                   T3Species(label='H2', smiles='[H][H]',
-                                              thermo=ThermoData(comment='comment 4'))],
-                         kinetics=Arrhenius(A=(1, 'cm^3/(mol*s)'), n=0, Ea=(0, 'kJ/mol'), comment='kinetic comment 0'))
+                           r_species=[h_species, ch4_species],
+                           p_species=[ch3_species, h2_species],
+                           kinetics=Arrhenius(A=(1, 'cm^3/(mol*s)'), n=0, Ea=(0, 'kJ/mol'), comment='kinetic comment 0'))
     t3.add_reaction(reaction=rmg_rxn_1, reasons='reason 4')
     assert t3.get_reaction_key(reaction=rmg_rxn_1) == 3
-    assert t3.reactions[3].rmg_label == 's9_H + s10_CH4 <=> s11_CH3 + s12_H2'
-    # assert 'H+CH4<=>CH3+H2' in t3.reactions[3].label
+    assert t3.reactions[3].rmg_label == 'H + CH4 <=> CH3 + H2'
     assert t3.reactions[3].qm_label == 's9_H + s10_CH4 <=> s11_CH3 + s12_H2'
     assert isinstance(t3.reactions[3], T3Reaction)
     assert t3.reactions[3].reasons == ['reason 4']
@@ -942,9 +964,9 @@ def test_get_reaction_by_index():
     rmg_species, rmg_reactions = t3.load_species_and_reactions_from_yaml_file()
     index = 5
     reaction = get_reaction_by_index(index, rmg_reactions)
-    assert reaction.reactants[0].label == 'H'
-    assert reaction.reactants[1].label == '[O]O'
-    assert reaction.products[0].label == 'OO'
+    assert reaction.r_species[0].label == 'H'
+    assert reaction.r_species[1].label == '[O]O'
+    assert reaction.p_species[0].label == 'OO'
 
 
 def test_legalize_species_label():

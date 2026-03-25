@@ -53,7 +53,7 @@ model(
     terminateAtMaxObjects=False,
 )
 
-simulator(atol=1e-16, rtol=1e-08, sens_atol=1e-06, sens_rtol=0.0001)
+simulator(atol=1e-16, rtol=1e-08)
 
 options(
     name='Seed',
@@ -64,7 +64,7 @@ options(
     generatePlots=False,
     saveSimulationProfiles=False,
     verboseComments=False,
-    saveEdgeSpecies=True,
+    saveEdgeSpecies=False,
     keepIrreversible=False,
     trimolecularProductReversible=True,
     wallTime='00:00:05:00',

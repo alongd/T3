@@ -2,7 +2,7 @@
 # encoding: utf-8
 
 """
-t3 tests test_cantera_constantTP module
+t3 tests test_cantera_constantHP module
 """
 
 import os
@@ -10,7 +10,7 @@ import shutil
 
 from t3.common import SIMULATE_TEST_DATA_BASE_PATH
 from tests.common import run_minimal
-from t3.simulate.cantera_constantTP import CanteraConstantTP
+from t3.simulate.cantera_constant_hp import CanteraConstantHP
 
 
 TEST_DIR = os.path.join(SIMULATE_TEST_DATA_BASE_PATH, 'cantera_simulator_test')
@@ -22,7 +22,7 @@ def test_set_up_no_sa():
     """
     t3 = run_minimal(project_directory=TEST_DIR)
     t3.set_paths()
-    cantera_simulator_adapter = CanteraConstantTP(t3=t3.t3,
+    cantera_simulator_adapter = CanteraConstantHP(t3=t3.t3,
                                                   rmg=t3.rmg,
                                                   paths=t3.paths,
                                                   logger=t3.logger,
@@ -44,7 +44,7 @@ def test_get_sa_coefficients():
     t3 = run_minimal(project_directory=TEST_DIR)
     t3.set_paths()
     observable_list = ['OH', 'H']
-    cantera_simulator_adapter = CanteraConstantTP(t3=t3.t3,
+    cantera_simulator_adapter = CanteraConstantHP(t3=t3.t3,
                                                   rmg=t3.rmg,
                                                   paths=t3.paths,
                                                   logger=t3.logger,
@@ -65,12 +65,11 @@ def test_get_sa_coefficients():
 
 def test_get_idt_by_T():
     """
-    Calculate the ignition delay time for RMG's minimal example.
-    Since this adapter simulates at constant T, this method returns a dictionary whose values are empty lists.
+    Calculate the ignition delay time for RMG's minimal example. Check that the dictionary found an idt.
     """
     t3 = run_minimal(project_directory=TEST_DIR)
     t3.set_paths()
-    cantera_simulator_adapter = CanteraConstantTP(t3=t3.t3,
+    cantera_simulator_adapter = CanteraConstantHP(t3=t3.t3,
                                                   rmg=t3.rmg,
                                                   paths=t3.paths,
                                                   logger=t3.logger,
@@ -80,8 +79,8 @@ def test_get_idt_by_T():
                                                   )
     cantera_simulator_adapter.simulate()
     idt_dict = cantera_simulator_adapter.get_idt_by_T()
-    assert len(idt_dict['idt']) == 0
-    assert len(idt_dict['idt_index']) == 0
+    assert len(idt_dict['idt']) == 1
+    assert len(idt_dict['idt_index']) == 1
 
 
 def test_find_equilibrium():
@@ -90,7 +89,7 @@ def test_find_equilibrium():
     """
     t3 = run_minimal(project_directory=TEST_DIR)
     t3.set_paths()
-    cantera_simulator_adapter = CanteraConstantTP(t3=t3.t3,
+    cantera_simulator_adapter = CanteraConstantHP(t3=t3.t3,
                                                   rmg=t3.rmg,
                                                   paths=t3.paths,
                                                   logger=t3.logger,
@@ -109,7 +108,7 @@ def test_get_t50():
     """
     t3 = run_minimal(project_directory=TEST_DIR)
     t3.set_paths()
-    cantera_simulator_adapter = CanteraConstantTP(t3=t3.t3,
+    cantera_simulator_adapter = CanteraConstantHP(t3=t3.t3,
                                                   rmg=t3.rmg,
                                                   paths=t3.paths,
                                                   logger=t3.logger,

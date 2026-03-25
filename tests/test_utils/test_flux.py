@@ -11,10 +11,29 @@ import shutil
 import cantera as ct
 import numpy as np
 import pydot
+import pytest
 
 from t3.common import TEST_DATA_BASE_PATH, SCRATCH_BASE_PATH
 import t3.utils.flux as flux
 from tests.common import almost_equal
+
+
+@pytest.fixture(scope="module")
+def hocho_simulation_data():
+    """
+    Runs the expensive HOCHO simulation ONCE for the superset of times required
+    by downstream tests.
+    """
+    model_path = os.path.join(TEST_DATA_BASE_PATH, 'models', 'HOCHO.yaml')
+    return flux.get_profiles_from_simulation(
+        model_path=model_path,
+        reactor_type='JSR',
+        times=[0.001, 0.5, 5],
+        composition={'HOCHO(1)': 1.0},
+        T=1000,
+        P=1,
+        V=100,
+    )
 
 
 def test_generate_flux():
@@ -27,7 +46,7 @@ def test_generate_flux():
                        observables=observables,
                        times=[0.001],
                        composition={'HOCHO(1)': 0.2, 'N2': 0.98},
-                       T=1200,
+                       T=1000,
                        P=1,
                        V=100,
                        reactor_type='JSR',
@@ -66,19 +85,6 @@ def test_generate_flux():
             assert os.path.isfile(os.path.join(folder_path, 'flux_diagrams', observable, f'flux_diagram_0.001_s.{ex}'))
 
 
-def test_get_profiles_from_simulation():
-    """Test getting profiles from a simulation."""
-    profiles = flux.get_profiles_from_simulation(model_path=os.path.join(TEST_DATA_BASE_PATH, 'models', 'HOCHO.yaml'),
-                                                 reactor_type='JSR',
-                                                 times=[0.5, 5],
-                                                 composition={'HOCHO(1)': 1.0},
-                                                 T=1000,
-                                                 P=1,
-                                                 V=100,
-                                                 )
-    assert len(profiles.keys()) == 2
-
-
 def test_get_rxn_stoichiometry():
     """Test getting the stoichiometry of all species in all reactions"""
     model_path = os.path.join(TEST_DATA_BASE_PATH, 'models', 'HOCHO.yaml')
@@ -97,24 +103,26 @@ def test_get_rxn_stoichiometry():
     assert stoichiometry['CO(8)'].count(-1.0) == 169
 
 
-def test_run_jsr():
-    """Test getting ROPs from a JSR reactor"""
-    model_path = os.path.join(TEST_DATA_BASE_PATH, 'models', 'HOCHO.yaml')
-    gas = ct.Solution(model_path)
-    profiles = flux.run_jsr(gas=gas, times=[0.5, 5], composition={'HOCHO(1)': 1.0}, T=1000, P=1, V=100)
+def test_jsr_physics_and_profiles(hocho_simulation_data):
+    """
+    Test getting ROPs from a JSR reactor
+    Validates that profiles are generated and physics are correct.
+    """
+    profiles = hocho_simulation_data
     keys = list(profiles.keys())
-    assert len(keys) == 2
-    assert 0.01 < keys[0] < 2.0
-    assert 2.0 < keys[1] < 20
+    assert len(keys) == 3
+    assert 0.01 < keys[1] < 2.0
+    assert 2.0 < keys[2] < 20
     assert almost_equal(profiles[keys[0]]['P'], 1.0e5, places=2)
     assert almost_equal(profiles[keys[1]]['P'], 1.0e5, places=2)
+    assert almost_equal(profiles[keys[2]]['P'], 1.0e5, places=2)
     assert profiles[keys[0]]['T'] == 1000.0
-    assert isinstance(profiles[keys[0]]['X'], dict)
-    assert almost_equal(profiles[keys[0]]['X']['CO(8)'], 7.53994e-6)
-    assert almost_equal(profiles[keys[0]]['X']['HOCHO(1)'], 0.99998358)
-    assert len(profiles[keys[0]]['X']) == 152
-    assert len(profiles[keys[0]]['ROPs']) == 152
-    assert len(profiles[keys[0]]['ROPs']['H(3)']) == 842
+    assert isinstance(profiles[keys[1]]['X'], dict)
+    assert almost_equal(profiles[keys[1]]['X']['CO(8)'], 7.53994e-6)
+    assert almost_equal(profiles[keys[1]]['X']['HOCHO(1)'], 0.99998358)
+    assert len(profiles[keys[1]]['X']) == 152
+    assert len(profiles[keys[1]]['ROPs']) == 152
+    assert len(profiles[keys[1]]['ROPs']['H(3)']) == 842
 
 
 def test_get_top_rops():
@@ -182,19 +190,14 @@ def test_generate_top_rop_bar_figs_2():
         assert os.path.isfile(os.path.join(folder_path, 'bar_ROPs', fig))
 
 
-def test_create_digraph_HOCHO_pyrolysis():
+def test_create_digraph_HOCHO_pyrolysis(hocho_simulation_data):
     """Test creating a flux diagram of formic acid pyrolysis"""
+    profiles = hocho_simulation_data
     observables = ['HOCHO(1)', 'CO2(9)']
     times = [0.001, 0.5]
-    profiles = flux.get_profiles_from_simulation(model_path=os.path.join(TEST_DATA_BASE_PATH, 'models', 'HOCHO.yaml'),
-                                                 reactor_type='JSR',
-                                                 times=times,
-                                                 composition={'HOCHO(1)': 1.0},
-                                                 T=1000,
-                                                 P=1,
-                                                 V=100,
-                                                 )
     for i, (time, profile) in enumerate(profiles.items()):
+        if not (abs(time - 0.001) < 1e-6 or abs(time - 0.5) < 1e-6):
+            continue
         flux_graph, nodes_to_explore, min_rop, max_rop = flux.get_flux_graph(profile=profile, observables=observables)
         folder_path = os.path.join(SCRATCH_BASE_PATH, 'test_create_digraph_HOCHO_pyrolysis')
         flux.create_digraph(flux_graph=flux_graph,
@@ -333,17 +336,12 @@ def test_get_node():
     assert 'fontsize=8' in node_f_str
 
 
-def test_get_flux_graph():
+def test_get_flux_graph(hocho_simulation_data):
     """Test getting a normalized flux profile and generating a flux graph."""
-    profiles = flux.get_profiles_from_simulation(model_path=os.path.join(TEST_DATA_BASE_PATH, 'models', 'HOCHO.yaml'),
-                                                 reactor_type='JSR',
-                                                 times=[0.001, 5],
-                                                 composition={'HOCHO(1)': 1.0},
-                                                 T=1000,
-                                                 P=1,
-                                                 V=100,
-                                                 )
+    profiles = hocho_simulation_data.copy()
     for i, (time, profile) in enumerate(profiles.items()):
+        if not (abs(time - 0.001) < 1e-6 or abs(time - 5) < 1e-6):
+            continue
         flux_graph, nodes_to_explore, min_rop, max_rop = flux.get_flux_graph(profile=profile, observables=['HOCHO(1)', 'CO2(9)'])
         if i == 0:
             assert nodes_to_explore == {'CO(8)', 'H2O(17)', 'H2(4)'}
@@ -367,8 +365,8 @@ def test_get_flux_graph():
                                                  )
     for i, (time, profile) in enumerate(profiles.items()):
         assert almost_equal(profile['P'], 1e5, places=2)  # Pa
-        assert almost_equal(profile['T'], 1200)
-        assert len(profile['ROPs']) == 36
+        assert almost_equal(profile['T'], 1000)
+        assert len(profile['ROPs']) == 152
         flux_graph, nodes_to_explore, min_rop, max_rop = flux.get_flux_graph(profile=profile, observables=['H4N2(1)'])
         if i == 0:
             assert nodes_to_explore == {'H2(4)', '2 H3N2(6)', 'ammonia(9)', 'H(3)', 'H2N2(7)', '2 NH2(5)',

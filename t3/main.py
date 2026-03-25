@@ -1173,7 +1173,7 @@ class T3(object):
             species.created_at_iteration = self.iteration
             species.reasons = reasons
 
-            qm_species = get_species_with_qm_label(species=species, key=key, arc_species=True)
+            qm_species = get_species_with_qm_label(species=species, key=key)
             species.qm_label = qm_species.label
 
             self.species[key] = species
@@ -1196,8 +1196,10 @@ class T3(object):
                         if self.qm['adapter'] == 'ARC':
                             # Update the qm_species with XYZ
                             qm_species.xyz = xyzs
+                            qm_species.conformers = xyzs  # ARC uses conformers list
                             # Also update the stored T3Species
                             species.xyz = xyzs
+                            species.conformers = xyzs
                         else:
                             raise NotImplementedError(f"Passing XYZ information to {self.qm['adapter']} "
                                                       f"is not yet implemented.")
@@ -1436,7 +1438,6 @@ def get_species_label_by_structure(adj: str,
 
 def get_species_with_qm_label(species: T3Species,
                               key: int,
-                              arc_species: bool = False,
                               ) -> T3Species:
     """
     Get a copy of the species with an updated QM label.
@@ -1445,7 +1446,6 @@ def get_species_with_qm_label(species: T3Species,
     Args:
          species (T3Species): The species to consider.
          key (int): The respective species key, if exists.
-         arc_species (bool, optional): Whether to return an T3Species object instance.
 
     Returns:
         T3Species: A copy of the original species with a formatted QM species label.

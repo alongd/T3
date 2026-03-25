@@ -10,7 +10,7 @@ import shutil
 
 from t3.common import SIMULATE_TEST_DATA_BASE_PATH
 from tests.common import run_minimal
-from t3.simulate.rmg_constantTP import RMGConstantTP
+from t3.simulate.rmg_constant_tp import RMGConstantTP
 
 
 TEST_DIR = os.path.join(SIMULATE_TEST_DATA_BASE_PATH, 'rmg_simulator_test')

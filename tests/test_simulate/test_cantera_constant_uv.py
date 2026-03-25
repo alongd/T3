@@ -10,7 +10,7 @@ import shutil
 
 from t3.common import SIMULATE_TEST_DATA_BASE_PATH
 from tests.common import run_minimal
-from t3.simulate.cantera_constantUV import CanteraConstantUV
+from t3.simulate.cantera_constant_uv import CanteraConstantUV
 
 
 TEST_DIR = os.path.join(SIMULATE_TEST_DATA_BASE_PATH, 'cantera_simulator_test')

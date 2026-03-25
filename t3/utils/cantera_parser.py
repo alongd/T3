@@ -82,32 +82,29 @@ def load_cantera_yaml_file(path: str,
 
         if reactants and products:
             kinetics = rxn_datum.get('rate-constant', {})
-            # Parse 'note' for metadata
             note = rxn_datum.get('note', '')
             kinetics_method = None
             kinetics_source = None
 
-            if 'Source:' in note:
-                try:
-                    source_part = note.split('Source:')[1].split('|')[0].strip()
-                    if 'Library' in source_part:
+            if note:
+                for line in note.split('\n'):
+                    line = line.strip()
+                    if line.startswith('Library reaction:'):
                         kinetics_method = 'Library'
-                        kinetics_source = source_part.replace('Library', '').strip()
-                    elif 'Template family' in source_part:
+                        kinetics_source = line.split(':', 1)[1].strip()
+                        break
+                    elif line.startswith('Template reaction:'):
                         kinetics_method = 'Rate Rules'
-                        kinetics_source = source_part.replace('Template family', '').strip()
-                    elif 'PDep' in source_part or 'Network' in source_part:
+                        kinetics_source = line.split(':', 1)[1].strip()
+                        break
+                    elif line.startswith('PDep reaction:'):
                         kinetics_method = 'PDep'
-                        kinetics_source = source_part
-                    else:
-                        kinetics_source = source_part
-                except IndexError:
-                    pass
+                        kinetics_source = line.split(':', 1)[1].strip()
+                        break
 
-            # Create reaction with labels first, then add species objects
-            rxn = T3Reaction(reactants=reactants_labels,
-                             products=products_labels,
-                             r_species=reactants,
+            # Create reaction with label strings for reactants/products (ARCReaction requirement)
+            # and species objects for r_species/p_species (T3 tracking)
+            rxn = T3Reaction(r_species=reactants,
                              p_species=products,
                              kinetics=kinetics,
                              kinetics_method=kinetics_method,
@@ -124,7 +121,15 @@ def load_cantera_yaml_file(path: str,
                  rxn.label = equation.replace('=', '<=>')
             else:
                  rxn.label = equation  # Fallback
-            reactions_list.append(rxn)
+            # Check for duplicates before adding
+            is_duplicate = False
+            for existing_rxn in reactions_list:
+                if existing_rxn.is_isomorphic(rxn):
+                    is_duplicate = True
+                    break
+            
+            if not is_duplicate:
+                reactions_list.append(rxn)
 
     return species_list, reactions_list
 
