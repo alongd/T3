@@ -58,6 +58,7 @@ class Reaction:
         self.kinetics = kinetics
         self.comment = comment
         self.index = index
+        self.is_pressure_dependent = False
 
     def __repr__(self):
         return f"<Reaction '{self.label}'>"
@@ -127,6 +128,7 @@ class PDepReaction(Reaction):
                  **kwargs):
         super().__init__(reactants=reactants, products=products, index=index, comment=comment, **kwargs)
         self.network = network
+        self.is_pressure_dependent = True
 
 
 class CanteraCondition:
