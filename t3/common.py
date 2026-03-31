@@ -42,6 +42,13 @@ def get_species_by_label(label: str,
     for species in species_list:
         if species.label == label or to_chemkin_label(species) == label:
             return species
+    # ARC's check_label() legalizes '(' → '[' and ')' → ']'.
+    # Try matching with that normalization so RMG-format labels still resolve.
+    if '(' in label:
+        bracket_label = label.replace('(', '[').replace(')', ']')
+        for species in species_list:
+            if species.label == bracket_label:
+                return species
     if '(' in label and ')' in label:
         # try by the RMG species index
         for species in species_list:

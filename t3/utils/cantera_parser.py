@@ -5,6 +5,7 @@ A lightweight parser for Cantera YAML files.
 
 import logging
 import os
+import re
 from typing import Dict, List, Optional, Tuple
 
 from arc.common import read_yaml_file
@@ -35,6 +36,12 @@ def load_cantera_yaml_file(path: str,
     data = read_yaml_file(path)
     species_list, reactions_list = [], []
 
+    # Build species list and a map from the *original* YAML label to the
+    # T3Species object.  ARC's check_label() may legalize the label during
+    # T3Species.__init__ (e.g. 'OH(4)' → 'OH[4]'), so reaction equations
+    # must be looked up via the original label, not the legalized one.
+    yaml_label_to_species: Dict[str, T3Species] = {}
+
     species_data = data.get('species', [])
     for spc_datum in species_data:
         label = spc_datum.get('name')
@@ -43,11 +50,11 @@ def load_cantera_yaml_file(path: str,
         species_note = spc_datum.get('note', '')
         thermo_datum = spc_datum.get('thermo', {})
         thermo_note = thermo_datum.get('note', '') if isinstance(thermo_datum, dict) else ''
-        
+
         # Combine notes for comment, prioritizing thermo_note
         note = thermo_note if thermo_note else species_note
 
-        thermo_method ,thermo_source = parse_thermo_comment(note)
+        thermo_method, thermo_source = parse_thermo_comment(note)
 
         adjlist = adjlists.get(label)
         t3_spc = T3Species(label=label,
@@ -57,12 +64,19 @@ def load_cantera_yaml_file(path: str,
                            adjlist=adjlist,
                            )
         species_list.append(t3_spc)
-        
+        yaml_label_to_species[label] = t3_spc
+
     reactions_data = data.get('reactions', [])
+    seen_equations = set()
     for i, rxn_datum in enumerate(reactions_data):
         equation = rxn_datum.get('equation')
         if not equation:
             continue
+        # Skip duplicate reaction entries (same equation appears multiple times
+        # for reactions with multiple rate expressions that are summed).
+        if equation in seen_equations:
+            continue
+        seen_equations.add(equation)
         if '<=>' in equation:
             arrow = '<=>'
         elif '=>' in equation:
@@ -70,12 +84,19 @@ def load_cantera_yaml_file(path: str,
         else:
             arrow = '<=>'
 
-        reactants_str, products_str = equation.split(arrow)
-        reactants_labels = [r.strip() for r in reactants_str.split('+')]
-        products_labels = [p.strip() for p in products_str.split('+')]
+        # Strip pressure-dependent collider notation before splitting by '+'.
+        # Patterns: '(+M)', '(+N2)', '(+N2(32))', and bare 'M' bath gas.
+        clean_eq = re.sub(r'\(\+[^)]*(?:\([^)]*\))?\)', '', equation)
+        reactants_str, products_str = clean_eq.split(arrow)
+        reactants_labels = [r.strip() for r in reactants_str.split('+') if r.strip()]
+        products_labels = [p.strip() for p in products_str.split('+') if p.strip()]
+        # Also strip bare M bath gas that isn't a real species
+        reactants_labels = [l for l in reactants_labels if l != 'M']
+        products_labels = [l for l in products_labels if l != 'M']
 
-        reactants = [get_species_by_label(l, species_list) for l in reactants_labels]
-        products = [get_species_by_label(l, species_list) for l in products_labels]
+        # Look up via original YAML label to handle ARC label legalization
+        reactants = [yaml_label_to_species.get(l) for l in reactants_labels]
+        products = [yaml_label_to_species.get(l) for l in products_labels]
 
         reactants = [r for r in reactants if r is not None]
         products = [p for p in products if p is not None]
@@ -104,15 +125,17 @@ def load_cantera_yaml_file(path: str,
 
             # Create reaction with label strings for reactants/products (ARCReaction requirement)
             # and species objects for r_species/p_species (T3 tracking)
+            is_pdep = bool(re.search(r'\(\+', equation)) or rxn_datum.get('type') in (
+                'pressure-dependent-Arrhenius', 'Chebyshev', 'falloff', 'chemically-activated')
             rxn = T3Reaction(r_species=reactants,
                              p_species=products,
                              kinetics=kinetics,
                              kinetics_method=kinetics_method,
                              kinetics_source=kinetics_source,
                              kinetics_comment=note,
+                             index=i,
+                             is_pressure_dependent=is_pdep,
                              )
-            if len(reactions_list) < 5:
-                logging.warning(f"DEBUG: Parsed T3Reaction type: {type(rxn)}")
             if '<=>' in equation:
                  rxn.label = equation
             elif '=>' in equation:
@@ -121,15 +144,7 @@ def load_cantera_yaml_file(path: str,
                  rxn.label = equation.replace('=', '<=>')
             else:
                  rxn.label = equation  # Fallback
-            # Check for duplicates before adding
-            is_duplicate = False
-            for existing_rxn in reactions_list:
-                if existing_rxn.is_isomorphic(rxn):
-                    is_duplicate = True
-                    break
-            
-            if not is_duplicate:
-                reactions_list.append(rxn)
+            reactions_list.append(rxn)
 
     return species_list, reactions_list
 

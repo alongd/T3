@@ -83,6 +83,12 @@ class T3Species(ARCSpecies):
 
     _index_counter = 0
 
+    # Fields that belong to T3Species but not to ARCSpecies.
+    # They are silently consumed here so they never leak into super().__init__().
+    _T3_ONLY_KWARGS = frozenset({
+        'qm_label', 't3_index', 'rmg_label', 'formula',
+    })
+
     def __init__(self,
                  label: Optional[str] = None,
                  key: Optional[int] = None,
@@ -97,6 +103,20 @@ class T3Species(ARCSpecies):
                  *args,
                  **kwargs):
 
+        # Strip T3-only fields so ARCSpecies.__init__ doesn't choke on them.
+        t3_extras = {k: kwargs.pop(k) for k in list(kwargs) if k in self._T3_ONLY_KWARGS}
+
+        # ARCSpecies requires a non-None string label.  When the caller only
+        # supplies an adjlist or SMILES, derive a temporary label so ARC's
+        # check_label() doesn't raise.
+        if label is None:
+            if 'adjlist' in kwargs:
+                first_line = kwargs['adjlist'].strip().splitlines()[0]
+                if not first_line[0].isdigit():
+                    label = first_line.split()[0]
+            if label is None:
+                label = kwargs.get('smiles') or 'unknown'
+
         super().__init__(label=label, *args, **kwargs)
 
         if key is None:
@@ -108,9 +128,9 @@ class T3Species(ARCSpecies):
                 T3Species._index_counter = key + 1
 
         self.created_at_iteration = created_at_iteration
-        self.rmg_label : Dict[int, str] = {self.created_at_iteration: label}
+        self.rmg_label : Dict[int, str] = t3_extras.get('rmg_label') or {self.created_at_iteration: label}
         self.formula = self.mol.get_formula()
-        self.qm_label = f"s{self.key}_{self.formula}"
+        self.qm_label = t3_extras.get('qm_label') or f"s{self.key}_{self.formula}"
         self.thermo = thermo
 
         if species_dict is not None:
@@ -205,13 +225,13 @@ class T3Species(ARCSpecies):
         }
         t3_kwargs = {k: species_dict.pop(k) for k in t3_keys if k in species_dict}
         rmg_label_history = t3_kwargs.pop("rmg_label", None)
-        t3_kwargs.pop("qm_label", None)
+        qm_label = t3_kwargs.pop("qm_label", None)
         is_ts = species_dict.get('is_ts', False)
         if 'mol' in species_dict and isinstance(species_dict['mol'], dict):
             species_dict['mol'] = rmg_mol_from_dict_repr(species_dict['mol'], is_ts=is_ts)
         species_dict['xyz'] = species_dict.get('final_xyz', None) or species_dict.get('initial_xyz', None)
         species_dict = remove_bad_arc_keys(species_dict)
-        instance = cls(**t3_kwargs, **species_dict)
+        instance = cls(qm_label=qm_label, **t3_kwargs, **species_dict)
         if rmg_label_history:
             instance.rmg_label = {int(k): v for k, v in rmg_label_history.items()}
         return instance
@@ -264,6 +284,9 @@ class T3Reaction(ARCReaction):
         is_pressure_dependent (bool): Whether the reaction is pressure-dependent.
     """
 
+    # Fields that belong to T3Reaction but not to ARCReaction.
+    _T3_ONLY_KWARGS = frozenset({'index'})
+
     def __init__(self,
                  # Source Tracking
                  kinetics_method: Optional[Union[KineticsMethod, str]] = None,
@@ -281,10 +304,16 @@ class T3Reaction(ARCReaction):
                  product_keys: Optional[List[int]] = None,
                  is_pressure_dependent: Optional[bool] = None,
                  # ARCReaction arguments
-                 *args, 
+                 *args,
                  **kwargs):
 
+        # Strip T3-only fields so ARCReaction.__init__ doesn't choke on them.
+        t3_extras = {k: kwargs.pop(k) for k in list(kwargs) if k in self._T3_ONLY_KWARGS}
+
         super().__init__(*args, **kwargs)
+
+        # Restore T3-only fields as attributes.
+        self.index = t3_extras.get('index')
 
         self.qm_label = qm_label
         self.rmg_label = rmg_label

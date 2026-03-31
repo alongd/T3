@@ -712,7 +712,7 @@ class T3(object):
                             key = self.add_species(species=species, reasons=reason)
                             if key is not None:
                                 species_keys.append(key)
-                    if reaction.kinetics.is_pressure_dependent() \
+                    if getattr(reaction, 'is_pressure_dependent', False) \
                             and reaction not in [rxn_tup[0] for rxn_tup in pdep_rxns_to_explore] \
                             and self.t3['sensitivity']['pdep_SA_threshold'] is not None:
                         pdep_rxns_to_explore.append((reaction, i, observable_label))

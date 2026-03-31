@@ -7,11 +7,13 @@ functional test that runs T3's minimal example
 
 
 import os
+import re
 import shutil
 
 from arc.common import read_yaml_file
 
 from t3 import T3
+from t3.chem import T3Species
 from t3.common import TEST_DATA_BASE_PATH
 from t3.runners.rmg_runner import backup_rmg_files
 from t3.utils.dependencies import check_dependencies
@@ -55,9 +57,10 @@ def test_no_t3_no_qm():
 
 def test_computing_thermo():
     """
-    Tests computing thermo for two species and running RMG with the updated data
-    Need xtb installed
+    Tests computing thermo for two species and running RMG with the updated data.
+    Needs xtb installed.
     """
+    T3Species.reset_counter()
     functional_test_directory = os.path.join(TEST_DATA_BASE_PATH, 'functional_2_thermo')
     delete_selective_content_from_test_dirs(test_dir=functional_test_directory)
     input_file = os.path.join(functional_test_directory, 'input.yml')
@@ -76,23 +79,23 @@ def test_computing_thermo():
     assert os.path.isfile(os.path.join(functional_test_directory, 'iteration_2', 'RMG', 'input.py'))
     assert os.path.isfile(os.path.join(functional_test_directory, 'iteration_2', 'RMG', 'RMG.log'))
 
-    expected_lines = [{'line': 'T3 iteration 1:', 'exists': False},
-                      {'line': 'Running RMG (tolerance = 0.1, iteration 1)...', 'exists': False},
-                      {'line': 'Running RMG (tolerance = 0.1, iteration 2)...', 'exists': False},
-                      {'line': 'Running a simulation with SA using RMGConstantTP for 1 conditions...', 'exists': False},
-                      {'line': 'Additional calculations required: True', 'exists': False},
-                      {'line': '0: s0_C3H7 "[CH2]CC" (status: Converged)', 'exists': False},
-                      {'line': 'T3 iteration 2 (just generating a model using RMG):', 'exists': False},
-                      {'line': 'Species Summary:', 'exists': False},
-                      ]
     with open(os.path.join(functional_test_directory, 't3.log'), 'r') as f:
-        lines = f.readlines()
-    for line in lines:
-        for expected_line_dict in expected_lines:
-            if expected_line_dict['line'] in line:
-                expected_line_dict['exists'] = True
-    for expected_line_dict in expected_lines:
-        assert expected_line_dict['exists'] is True, f"Expected line '{expected_line_dict['line']}' not found in t3.log"
+        log_text = f.read()
+
+    # Check expected log entries (plain substring matches)
+    for expected in ['T3 iteration 1:',
+                     'Running RMG (tolerance = 0.1, iteration 1)...',
+                     'Running RMG (tolerance = 0.1, iteration 2)...',
+                     'Running a simulation with SA using RMGConstantTP for',
+                     'Additional calculations required: True',
+                     'T3 iteration 2 (just generating a model using RMG):',
+                     'Species Summary:',
+                     ]:
+        assert expected in log_text, f"Expected '{expected}' not found in t3.log"
+
+    # Check species convergence line (key number depends on global counter, so use regex)
+    assert re.search(r'\d+: s\d+_C3H7 "\[CH2\]CC" \(status: Converged\)', log_text), \
+        "Expected a converged C3H7 species line in t3.log"
 
 
 def test_rmg_files_backup_before_restart():

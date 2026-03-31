@@ -32,16 +32,16 @@ label2:
 
 def test_get_species_by_label():
     """Test getting species by label"""
-    t3_species = [T3Species(label='H2O', t3_index=7, smiles='O'),
-                  T3Species(label='CH4', t3_index=1, smiles='C')]
+    t3_species = [T3Species(label='H2O', key=7, smiles='O'),
+                  T3Species(label='CH4', key=1, smiles='C')]
     label = 'H2O'
     species = common.get_species_by_label(label, t3_species)
     assert species.label == label
-    assert species.t3_index == 7
-    
+    assert species.key == 7
+
     species = common.get_species_by_label('CH4', t3_species)
     assert species.label == 'CH4'
-    assert species.t3_index == 1
+    assert species.key == 1
 
 
 def test_get_rmg_species_from_a_species_dict():

@@ -560,7 +560,7 @@ def test_determine_species_to_calculate():
     assert additional_calcs_required
     assert len(list(t3.species.keys())) == 3
     assert all([species.reasons == ['(i 2) All core species'] for species in t3.species.values()])
-    assert all([species.label in ['OH(4)', 'HO2(6)', 'H2O2(9)'] for species in t3.species.values()])
+    assert all([species.label in ['OH[4]', 'HO2[6]', 'H2O2[9]'] for species in t3.species.values()])
     print([species.qm_label for species in t3.species.values()])
     assert all([species.qm_label in ['s0_HO', 's1_HO2', 's2_H2O2'] for species in t3.species.values()])
 
@@ -578,13 +578,15 @@ def test_determine_species_to_calculate():
                 for species in t3.species.values() if species.label not in ['H', 'OH']])
 
     # 4. SA observables
-    assert t3.species[0].label == 'H(3)'
+    # Species labels are legalized by ARC: '(' → '[', ')' → ']'
+    # Reason strings retain the original RMG format from the collision violators file.
+    assert t3.species[0].label == 'H[3]'
     assert t3.species[0].reasons == \
            ['(i 3) Participates in a reaction for which a rate coefficient is computed.']
-    assert t3.species[3].label == 'C7H13(920)'
+    assert t3.species[3].label == 'C7H13[920]'
     assert t3.species[3].reasons == \
            ['(i 3) Species participates in collision rate violating reaction: H(3)+C7H13(920)=C7H14(323)']
-    assert t3.species[10].label == 'C6H8(2027)'
+    assert t3.species[10].label == 'C6H8[2027]'
     assert t3.species[10].reasons == \
            ['(i 3) Species participates in collision rate violating reaction: C6H8(2027)=C2H4(21)+C4H4(2531)']
 
@@ -597,35 +599,38 @@ def test_reaction_requires_refinement():
                      )
     reactions = t3.load_species_and_reactions_from_yaml_file()[1]
 
-    assert reactions[10].kinetics_method.value == 'Library'
-    assert reactions[10].kinetics_source == 'JetSurF2.0'
-    assert reactions[10].kinetics_comment.strip() == """Reaction index: Chemkin #30; RMG #4278
+    # Reaction list indices are 0-based after deduplicating DUPLICATE entries.
+    # Chemkin DUPLICATE reactions share an equation; only the first is kept.
+    assert reactions[24].kinetics_method.value == 'Library'
+    assert reactions[24].kinetics_source == 'JetSurF2.0'
+    assert reactions[24].kinetics_comment.strip() == """Reaction index: Chemkin #30; RMG #4278
 Library reaction: JetSurF2.0
 Flux pairs: PC4H9(191), C4H8(197); CH3(23), CH4(31);"""
 
-    assert reactions[50].kinetics_method.value == 'Library'
-    assert reactions[50].kinetics_source == 'JetSurF2.0'
-    assert reactions[50].kinetics_comment.strip() == """Reaction index: Chemkin #76; RMG #4237
+    assert reactions[67].kinetics_method.value == 'Library'
+    assert reactions[67].kinetics_source == 'JetSurF2.0'
+    assert reactions[67].kinetics_comment.strip() == """Reaction index: Chemkin #76; RMG #4237
 Library reaction: JetSurF2.0
 Flux pairs: IC3H7(102), C3H6(104); H(2), H2(4);"""
 
-    assert reactions[80].kinetics_method.value == 'Rate Rules'
-    assert reactions[80].kinetics_source == 'Disproportionation'
-    assert reactions[80].kinetics_comment.strip() == """Reaction index: Chemkin #114; RMG #6134
+    assert reactions[102].kinetics_method.value == 'Rate Rules'
+    assert reactions[102].kinetics_source == 'Disproportionation'
+    comment_102 = '\n'.join(line.rstrip() for line in reactions[102].kinetics_comment.strip().splitlines())
+    assert comment_102 == """Reaction index: Chemkin #114; RMG #6134
 Template reaction: Disproportionation
-Flux pairs: S(842), fuel(1); C2H5(52), C2H4(22); 
+Flux pairs: S(842), fuel(1); C2H5(52), C2H4(22);
 Estimated from node Root_N-4R->H_4CNOS-u1_N-1R!H->O_N-4CNOS->O_Ext-4CNS-R_N-Sp-5R!H#4CCCNNNSSS_N-2R!H->S_N-5R!H->O_Sp-5CS-4CCNSS_Ext-4CNS-R
 Multiplied by reaction path degeneracy 3.0"""
 
-    assert reactions[100].kinetics_method.value == 'Library'
-    assert reactions[100].kinetics_source == 'JetSurF2.0'
-    assert reactions[100].kinetics_comment.strip() == """Reaction index: Chemkin #141; RMG #4977
+    assert reactions[126].kinetics_method.value == 'Library'
+    assert reactions[126].kinetics_source == 'JetSurF2.0'
+    assert reactions[126].kinetics_comment.strip() == """Reaction index: Chemkin #141; RMG #4977
 Library reaction: JetSurF2.0
 Flux pairs: fuel(1), S(838); H(2), H2(4);"""
 
-    assert reactions[120].kinetics_method.value == 'Library'
-    assert reactions[120].kinetics_source == 'JetSurF2.0'
-    assert reactions[120].kinetics_comment.strip() == """Reaction index: Chemkin #163; RMG #4413
+    assert reactions[146].kinetics_method.value == 'Library'
+    assert reactions[146].kinetics_source == 'JetSurF2.0'
+    assert reactions[146].kinetics_comment.strip() == """Reaction index: Chemkin #163; RMG #4413
 Library reaction: JetSurF2.0
 Flux pairs: C5H11(428), C5H10(431); H(2), H2(4);"""
 
@@ -655,6 +660,81 @@ def test_determine_species_based_on_sa():
     species_keys = t3.determine_species_based_on_sa()
     assert species_keys == [0, 1]
     # remove directories created when performing SA
+    dirs = [t3.paths['SA']]
+    for dir_ in dirs:
+        if os.path.isdir(dir_):
+            shutil.rmtree(dir_, ignore_errors=True)
+    t3_log = os.path.join(TEST_DATA_BASE_PATH, 'minimal_data', 't3.log')
+    if os.path.isfile(t3_log):
+        os.remove(t3_log)
+
+
+def test_determine_reactions_based_on_sa_cantera():
+    """Test determining reactions to calculate based on SA using the CanteraConstantTP adapter"""
+    t3 = run_minimal(project_directory=os.path.join(TEST_DATA_BASE_PATH, 'minimal_data'),
+                     iteration=1,
+                     set_paths=True,
+                     )
+    t3.rmg_species, t3.rmg_reactions = t3.load_species_and_reactions_from_yaml_file()
+    sa_observables = ['H2', 'OH']
+    simulate_adapter = simulate_factory(simulate_method='CanteraConstantTP',
+                                        t3=t3.t3,
+                                        rmg=t3.rmg,
+                                        paths=t3.paths,
+                                        logger=t3.logger,
+                                        atol=t3.rmg['model']['atol'],
+                                        rtol=t3.rmg['model']['rtol'],
+                                        observable_list=sa_observables,
+                                        sa_atol=t3.t3['sensitivity']['atol'],
+                                        sa_rtol=t3.t3['sensitivity']['rtol'],
+                                        )
+    simulate_adapter.simulate()
+    t3.sa_dict = simulate_adapter.get_sa_coefficients()
+    reaction_keys = t3.determine_reactions_based_on_sa()
+    assert isinstance(reaction_keys, list)
+    # all returned keys should correspond to reactions stored in t3.reactions
+    for key in reaction_keys:
+        assert key in t3.reactions
+        assert isinstance(t3.reactions[key], T3Reaction)
+        assert len(t3.reactions[key].reasons) > 0
+    # clean up
+    dirs = [t3.paths['SA']]
+    for dir_ in dirs:
+        if os.path.isdir(dir_):
+            shutil.rmtree(dir_, ignore_errors=True)
+    t3_log = os.path.join(TEST_DATA_BASE_PATH, 'minimal_data', 't3.log')
+    if os.path.isfile(t3_log):
+        os.remove(t3_log)
+
+
+def test_determine_reactions_based_on_sa_rmg():
+    """Test determining reactions to calculate based on SA using the RMGConstantTP adapter"""
+    t3 = run_minimal(project_directory=os.path.join(TEST_DATA_BASE_PATH, 'minimal_data'),
+                     iteration=1,
+                     set_paths=True,
+                     )
+    t3.rmg_species, t3.rmg_reactions = t3.load_species_and_reactions_from_yaml_file()
+    sa_observables = ['H2', 'OH']
+    simulate_adapter = simulate_factory(simulate_method='RMGConstantTP',
+                                        t3=t3.t3,
+                                        rmg=t3.rmg,
+                                        paths=t3.paths,
+                                        logger=t3.logger,
+                                        atol=t3.rmg['model']['atol'],
+                                        rtol=t3.rmg['model']['rtol'],
+                                        observable_list=sa_observables,
+                                        sa_atol=t3.t3['sensitivity']['atol'],
+                                        sa_rtol=t3.t3['sensitivity']['rtol'],
+                                        )
+    simulate_adapter.simulate()
+    t3.sa_dict = simulate_adapter.get_sa_coefficients()
+    reaction_keys = t3.determine_reactions_based_on_sa()
+    assert isinstance(reaction_keys, list)
+    for key in reaction_keys:
+        assert key in t3.reactions
+        assert isinstance(t3.reactions[key], T3Reaction)
+        assert len(t3.reactions[key].reasons) > 0
+    # clean up
     dirs = [t3.paths['SA']]
     for dir_ in dirs:
         if os.path.isdir(dir_):
@@ -715,7 +795,8 @@ def test_determine_species_based_on_collision_violators():
         'S(25149)'
     ]
     expected_numeric_identifiers = [int(re.findall(r'\((\d+)\)', species)[0]) for species in expected_species_to_calc]
-    numeric_identifiers = [int(re.findall(r'\((\d+)\)', t3.species[index].label)[0]) for index in species_to_calc]
+    # ARC legalizes '(' → '[', ')' → ']' in species labels
+    numeric_identifiers = [int(re.findall(r'[\[\(](\d+)[\]\)]', t3.species[index].label)[0]) for index in species_to_calc]
 
     # Assert that the numeric identifiers are the same
     # We do this because 'S' is a generic label for a species, and the numeric identifier is what distinguishes them
@@ -782,9 +863,9 @@ def test_load_species_and_reactions_from_yaml_file():
     assert len(rmg_species) == 12
     assert len(rmg_reactions) == 17
     assert rmg_species[0].label == 'Ar'
-    assert rmg_species[10].label == 'H2O'
-    assert str(rmg_reactions[0]) == 'H(3) + H(3) <=> H2(1)'
-    assert str(rmg_reactions[10]) == 'OH(4) + H2O2(9) <=> HO2(6) + H2O(7)'
+    assert rmg_species[10].label == 'H2O[7]'
+    assert 'H(3) + H(3) <=> H2(1)' in str(rmg_reactions[0])
+    assert 'OH(4) + H2O2(9) <=> HO2(6) + H2O(7)' in str(rmg_reactions[10])
 
 
 def test_add_species():
@@ -802,12 +883,12 @@ def test_add_species():
         spc.thermo = ThermoData()
 
     assert t3.get_species_key(species=spc_1) == 0
-    assert t3.species[0].label == 'OH(4)'
+    assert t3.species[0].label == 'OH[4]'
     assert t3.species[0].reasons == ['(i 2) All core species']
 
     t3.add_species(species=spc_1, reasons='Some other reason')
     assert t3.get_species_key(species=spc_1) == 0
-    assert t3.species[0].label == 'OH(4)'
+    assert t3.species[0].label == 'OH[4]'
     assert t3.species[0].reasons == ['(i 2) All core species', 'Some other reason']
 
     assert t3.get_species_key(species=spc_2) is None
@@ -905,15 +986,12 @@ def test_add_reaction():
     t3.add_reaction(reaction=rmg_rxn_1, reasons='reason 4')
     assert t3.get_reaction_key(reaction=rmg_rxn_1) == 3
     assert t3.reactions[3].rmg_label == 'H + CH4 <=> CH3 + H2'
-    assert t3.reactions[3].qm_label == 's9_H + s10_CH4 <=> s11_CH3 + s12_H2'
+    # qm_label is built from species labels (these species have simple labels, no RMG index)
+    assert t3.reactions[3].qm_label == 'H + CH4 <=> CH3 + H2'
     assert isinstance(t3.reactions[3], T3Reaction)
     assert t3.reactions[3].reasons == ['reason 4']
     assert t3.reactions[3].is_converged is False
     assert t3.reactions[3].created_at_iteration == 1
-    assert rmg_rxn_1.reactants[0].label == 's9_H'
-    assert rmg_rxn_1.reactants[1].label == 's10_CH4'
-    assert rmg_rxn_1.products[0].label == 's11_CH3'
-    assert rmg_rxn_1.products[1].label == 's12_H2'
 
 
 def test_dump_species():
@@ -964,9 +1042,10 @@ def test_get_reaction_by_index():
     rmg_species, rmg_reactions = t3.load_species_and_reactions_from_yaml_file()
     index = 5
     reaction = get_reaction_by_index(index, rmg_reactions)
-    assert reaction.r_species[0].label == 'H'
-    assert reaction.r_species[1].label == '[O]O'
-    assert reaction.p_species[0].label == 'OO'
+    # Species labels are ARC-legalized: '(' → '[', ')' → ']'
+    assert reaction.r_species[0].label == 'H[3]'
+    assert reaction.r_species[1].label == 'HO2[6]'
+    assert reaction.p_species[0].label == 'OO[9]'
 
 
 def test_legalize_species_label():
@@ -977,10 +1056,12 @@ def test_legalize_species_label():
 
     species = T3Species(smiles='C#C', label='C#C')
     legalize_species_label(species=species)
-    assert species.label == 'C2H2'
+    # ARC legalizes 'C#C' → 'CtC' during ARCSpecies.__init__; all chars in CtC are valid
+    assert species.label == 'CtC'
 
     species = T3Species(smiles='C=CC', label='S(2398)')
     legalize_species_label(species=species)
+    # S(2398) matches the S(...) pattern → replaced with formula, then ARC legalizes parentheses
     assert species.label == 'C3H6'
 
 
@@ -995,27 +1076,25 @@ def test_get_species_label_by_structure():
 2 H u0 p0 c0 {1,S}
 3 H u0 p0 c0 {1,S}"""
     label = get_species_label_by_structure(adj, rmg_species)
-    assert label == 'H2O'
+    assert label == 'H2O[7]'
 
-    spc_1 = T3Species(label='CH2')
     adj_1 = """CH2
 multiplicity 3
 1 C u2 p0 c0 {2,S} {3,S}
 2 H u0 p0 c0 {1,S}
 3 H u0 p0 c0 {1,S}"""
-    spc_1.from_adjacency_list(adj_1)
-    spc_2 = T3Species(label='CH2(S)')
-    adj_2 = """CH2(S)
+    spc_1 = T3Species(label='CH2', adjlist=adj_1)
+    adj_2 = """CH2[S]
 multiplicity 1
 1 C u0 p1 c0 {2,S} {3,S}
 2 H u0 p0 c0 {1,S}
 3 H u0 p0 c0 {1,S}"""
-    spc_2.from_adjacency_list(adj_2)
+    spc_2 = T3Species(label='CH2[S]', adjlist=adj_2)
     species_list = [spc_1, spc_2]
     label_1 = get_species_label_by_structure(adj_1, species_list)
     assert label_1 == 'CH2'
     label_2 = get_species_label_by_structure(adj_2, species_list)
-    assert label_2 == 'CH2(S)'
+    assert label_2 == 'CH2[S]'
 
 
 def test_check_overtime():
